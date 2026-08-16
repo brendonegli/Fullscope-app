@@ -489,11 +489,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
   </div>
 </div>
 
-<!-- Firebase -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
+<!-- Firebase compat (works in regular scripts) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
   const firebaseConfig = {
     apiKey: "AIzaSyCUpd0U-_-b_x8_2t1G2qhlHi7QZfYUViE",
     authDomain: "fullscope-services.firebaseapp.com",
@@ -503,21 +502,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
     appId: "1:718935411628:web:2566e2da27acfa82d70809"
   };
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const turnsCol = collection(db, 'turns');
-
-  // Expose Firestore helpers to the global scope
-  window._db = db;
-  window._turnsCol = turnsCol;
-  window._fsDoc = doc;
-  window._fsSetDoc = setDoc;
-  window._fsDeleteDoc = deleteDoc;
+  firebase.initializeApp(firebaseConfig);
+  const _db = firebase.firestore();
+  const _turnsCol = _db.collection('turns');
 
   // Real-time listener — keeps local cache in sync across all devices
   window._turns = [];
   window._firestoreReady = false;
-  onSnapshot(turnsCol, (snapshot) => {
+
+  _turnsCol.onSnapshot((snapshot) => {
     window._turns = snapshot.docs.map(d => d.data());
     window._firestoreReady = true;
     // Re-render whichever screen is active
@@ -529,7 +522,17 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
       if(id === 'screen-punchout' && typeof renderPunchout === 'function') renderPunchout();
       if(id === 'screen-finalwalk' && typeof renderFinalWalk === 'function') renderFinalWalk();
     }
+  }, (err) => {
+    console.error('Firestore listener error:', err);
   });
+
+  // Global save/delete used by app functions
+  window._saveTurn = function(turn) {
+    return _turnsCol.doc(String(turn.id)).set(turn);
+  };
+  window._deleteTurn = function(id) {
+    return _turnsCol.doc(String(id)).delete();
+  };
 </script>
 <script>
 // ─── ROLE & PIN ───────────────────────────────────────
@@ -1195,12 +1198,12 @@ function saveTurns(turnsArray){
 }
 async function saveTurn(turn){
   try{
-    await window._fsSetDoc(window._fsDoc(window._db,'turns',turn.id), turn);
+    await window._saveTurn(turn);
   } catch(e){ console.error('saveTurn failed',e); showToast('Save failed – check connection','error'); }
 }
 async function deleteTurn(id){
   try{
-    await window._fsDeleteDoc(window._fsDoc(window._db,'turns',id));
+    await window._deleteTurn(id);
   } catch(e){ console.error('deleteTurn failed',e); }
 }
 
