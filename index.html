@@ -489,6 +489,48 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
   </div>
 </div>
 
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCUpd0U-_-b_x8_2t1G2qhlHi7QZfYUViE",
+    authDomain: "fullscope-services.firebaseapp.com",
+    projectId: "fullscope-services",
+    storageBucket: "fullscope-services.firebasestorage.app",
+    messagingSenderId: "718935411628",
+    appId: "1:718935411628:web:2566e2da27acfa82d70809"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const turnsCol = collection(db, 'turns');
+
+  // Expose Firestore helpers to the global scope
+  window._db = db;
+  window._turnsCol = turnsCol;
+  window._fsDoc = doc;
+  window._fsSetDoc = setDoc;
+  window._fsDeleteDoc = deleteDoc;
+
+  // Real-time listener — keeps local cache in sync across all devices
+  window._turns = [];
+  window._firestoreReady = false;
+  onSnapshot(turnsCol, (snapshot) => {
+    window._turns = snapshot.docs.map(d => d.data());
+    window._firestoreReady = true;
+    // Re-render whichever screen is active
+    const active = document.querySelector('.screen.active');
+    if(active){
+      const id = active.id;
+      if(id === 'screen-tracker' && typeof renderTracker === 'function') renderTracker();
+      if(id === 'screen-materials' && typeof renderMaterials === 'function') renderMaterials();
+      if(id === 'screen-punchout' && typeof renderPunchout === 'function') renderPunchout();
+      if(id === 'screen-finalwalk' && typeof renderFinalWalk === 'function') renderFinalWalk();
+    }
+  });
+</script>
 <script>
 // ─── ROLE & PIN ───────────────────────────────────────
 const CORRECT_PIN = '04040000';
@@ -1122,7 +1164,7 @@ function doSave(unit,due,sub,checked,overwriteId){
     turns.push(turn);
     showToast('Unit '+unit+' saved ✓','success');
   }
-  saveTurns(turns);
+  saveTurn(turn);
 }
 
 // ─── RESET ────────────────────────────────────────────
@@ -1144,9 +1186,23 @@ function resetWalkthrough(){
   );
 }
 
-// ─── STORAGE ──────────────────────────────────────────
-function getTurns(){ try{return JSON.parse(localStorage.getItem('fs_turns')||'[]');}catch{return[];} }
-function saveTurns(t){ localStorage.setItem('fs_turns',JSON.stringify(t)); }
+// ─── STORAGE (Firestore) ──────────────────────────────
+function getTurns(){
+  return window._turns || [];
+}
+function saveTurns(turnsArray){
+  // No-op: individual saves handled by saveTurn/deleteTurn
+}
+async function saveTurn(turn){
+  try{
+    await window._fsSetDoc(window._fsDoc(window._db,'turns',turn.id), turn);
+  } catch(e){ console.error('saveTurn failed',e); showToast('Save failed – check connection','error'); }
+}
+async function deleteTurn(id){
+  try{
+    await window._fsDeleteDoc(window._fsDoc(window._db,'turns',id));
+  } catch(e){ console.error('deleteTurn failed',e); }
+}
 
 // ─── BUILD MATERIAL LIST FOR A TURN ──────────────────
 // Returns array of {key, name, qty (string), qtyNum (number or null), cat}
@@ -1246,7 +1302,7 @@ function renderTracker(){
     editBtn.onclick=(e)=>{e.stopPropagation();openEditModal(turn.id);}; actions.appendChild(editBtn);
     if(turn.status!=='complete'){
       const markBtn=document.createElement('button'); markBtn.className='btn btn-sm btn-gold'; markBtn.textContent='✓ Mark Complete';
-      markBtn.onclick=(e)=>{e.stopPropagation();const ts=getTurns();const t=ts.find(t=>t.id===turn.id);if(t){t.status='complete';saveTurns(ts);renderTracker();}};
+      markBtn.onclick=(e)=>{e.stopPropagation();const ts=getTurns();const t=ts.find(t=>t.id===turn.id);if(t){t.status='complete';saveTurn(t);renderTracker();}};
       actions.appendChild(markBtn);
     }
     const delBtn=document.createElement('button'); delBtn.className='btn btn-sm btn-danger'; delBtn.textContent='🗑 Delete';
@@ -1256,7 +1312,7 @@ function renderTracker(){
       showConfirm('Delete Turn',`Are you sure you want to delete the turn for <strong>Unit ${turnUnit}</strong>? This cannot be undone.`,[
         {label:'Cancel',style:'btn-ghost',onClick:()=>{}},
         {label:'Delete',style:'btn-danger',onClick:()=>{
-          saveTurns(getTurns().filter(t=>t.id!==turnId));
+          deleteTurn(turnId);
           openAccordions.delete(turnId);
           showToast('Unit '+turnUnit+' deleted','warning');
           renderTracker();
@@ -1359,7 +1415,7 @@ function saveEdit(){
   turn.sub=document.getElementById('editSub').value.trim();
   turn.due=document.getElementById('editDue').value;
   turn.status=document.getElementById('editStatus').value;
-  saveTurns(turns); closeEditModal(); renderTracker();
+  saveTurn(turn); closeEditModal(); renderTracker();
   showToast('Unit '+turn.unit+' updated ✓','success');
   if(document.getElementById('screen-materials').classList.contains('active')) renderMaterials();
 }
@@ -1384,7 +1440,7 @@ function setMatStatus(turnId, itemKey, field, value){
   turn.matStatus[itemKey][field]=value;
   // If delivered is being checked, also mark ordered
   if(field==='delivered'&&value) turn.matStatus[itemKey]['ordered']=true;
-  saveTurns(turns);
+  saveTurn(turn);
   renderMaterials();
 }
 
@@ -1637,7 +1693,7 @@ function toggleSubTask(turnId, taskId){
   if(!turn) return;
   if(!turn.subProgress) turn.subProgress={};
   turn.subProgress[taskId]=!turn.subProgress[taskId];
-  saveTurns(turns);
+  saveTurn(turn);
   // Re-render sub view
   const view=document.getElementById('subTaskView');
   renderSubView(turn, view);
@@ -1649,7 +1705,7 @@ function togglePoTask(turnId, idx){
   if(!turn) return;
   if(!turn.poProgress) turn.poProgress={};
   turn.poProgress[idx]=!turn.poProgress[idx];
-  saveTurns(turns);
+  saveTurn(turn);
   const view=document.getElementById('subTaskView');
   renderSubView(turn, view);
 }
@@ -1660,7 +1716,7 @@ function submitPunchOut(turnId){
   if(!turn) return;
   turn.stage='punchout';
   turn.punchoutSubmittedAt=new Date().toISOString();
-  saveTurns(turns);
+  saveTurn(turn);
   showToast('Unit '+turn.unit+' submitted for Punch-Out ✓','success');
   const view=document.getElementById('subTaskView');
   renderSubView(turn, view);
@@ -1672,7 +1728,7 @@ function submitFinalWalk(turnId){
   if(!turn) return;
   turn.stage='finalwalk';
   turn.finalWalkSubmittedAt=new Date().toISOString();
-  saveTurns(turns);
+  saveTurn(turn);
   showToast('Unit '+turn.unit+' submitted for Final Walkthrough ✓','success');
   const view=document.getElementById('subTaskView');
   renderSubView(turn, view);
@@ -1745,7 +1801,7 @@ function addPoItem(turnId){
   if(!turn) return;
   if(!turn.punchoutItems) turn.punchoutItems=[];
   turn.punchoutItems.push(val);
-  saveTurns(turns);
+  saveTurn(turn);
   inp.value='';
   renderPunchout();
 }
@@ -1761,7 +1817,7 @@ function removePoItem(turnId, idx){
     Object.entries(turn.poProgress).forEach(([k,v])=>{ if(parseInt(k)<idx) newProg[k]=v; else if(parseInt(k)>idx) newProg[parseInt(k)-1]=v; });
     turn.poProgress=newProg;
   }
-  saveTurns(turns);
+  saveTurn(turn);
   renderPunchout();
 }
 
@@ -1778,7 +1834,7 @@ function sendPunchoutToSub(turnId){
         turn.stage='subfix';
         turn.punchoutSentAt=new Date().toISOString();
         turn.poProgress={};
-        saveTurns(turns);
+        saveTurn(turn);
         showToast('Punch-out list sent to sub ✓','success');
         renderPunchout();
       }}
@@ -1845,7 +1901,7 @@ function renderFinalWalk(){
           {label:'Mark Complete',style:'btn-gold',onClick:()=>{
             const ts=getTurns();
             const t=ts.find(t=>t.id===turnId);
-            if(t){ t.stage='complete'; t.status='complete'; t.completedAt=new Date().toISOString(); saveTurns(ts); }
+            if(t){ t.stage='complete'; t.status='complete'; t.completedAt=new Date().toISOString(); saveTurn(t); }
             showToast('Unit '+turn.unit+' marked complete ✓','success');
             renderFinalWalk();
             // Refresh tracker if open
@@ -1869,7 +1925,7 @@ function addSubNote(turnId){
   if(!turn) return;
   if(!turn.subNotes) turn.subNotes=[];
   turn.subNotes.push({text:val, at:new Date().toISOString()});
-  saveTurns(turns);
+  saveTurn(turn);
   inp.value='';
   showToast('Note added ✓','success');
   // Re-render sub view with updated turn
