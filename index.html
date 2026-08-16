@@ -1,4 +1,1887 @@
-<!DOCTYPE html>
+<!<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FullScope Services – Unit Turn Manager</title>
+<style>
+:root {
+  --navy:#1a2744;--gold:#c9a84c;--gold-light:#f0d9a0;--white:#fff;
+  --off-white:#f7f6f2;--light-gray:#eeecea;--mid-gray:#c8c4bc;
+  --dark-gray:#4a4640;--text:#1a1a1a;--green:#2d6a4f;--green-light:#e8f5ee;
+  --red:#8b2020;--red-light:#fdf0f0;--shadow:0 2px 12px rgba(26,39,68,.10);--radius:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);color:var(--text);min-height:100vh;}
+
+/* HEADER */
+.app-header{background:var(--navy);padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-mark{width:34px;height:34px;background:var(--gold);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;color:var(--navy);letter-spacing:-1px;}
+.logo-text{color:#fff;font-size:15px;font-weight:700;} .logo-text span{color:var(--gold);}
+.header-nav{display:flex;gap:5px;flex-wrap:wrap;}
+.nav-btn{background:transparent;border:1.5px solid rgba(255,255,255,.25);color:rgba(255,255,255,.85);padding:6px 11px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:500;transition:all .15s;}
+.nav-btn:hover,.nav-btn.active{background:var(--gold);border-color:var(--gold);color:var(--navy);}
+.nav-btn.lock-btn{border-color:rgba(201,168,76,.4);color:var(--gold);}
+
+/* SCREENS */
+.screen{display:none;} .screen.active{display:block;}
+
+/* PIN */
+.pin-overlay{position:fixed;inset:0;background:rgba(26,39,68,.92);z-index:200;display:flex;align-items:center;justify-content:center;}
+.pin-overlay.hidden{display:none;}
+.pin-box{background:#fff;border-radius:14px;padding:36px 32px;width:320px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.3);}
+.pin-logo{width:48px;height:48px;background:var(--navy);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:20px;color:var(--gold);margin:0 auto 16px;}
+.pin-box h2{font-size:18px;color:var(--navy);margin-bottom:6px;} .pin-box p{font-size:13px;color:var(--dark-gray);margin-bottom:20px;}
+.pin-dots{display:flex;justify-content:center;gap:10px;margin-bottom:20px;}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--mid-gray);background:transparent;transition:all .15s;}
+.pin-dot.filled{background:var(--navy);border-color:var(--navy);}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.pin-key{background:var(--off-white);border:1.5px solid var(--light-gray);border-radius:8px;padding:14px;font-size:18px;font-weight:600;color:var(--navy);cursor:pointer;transition:all .12s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+.pin-key:hover{background:var(--navy);color:#fff;} .pin-key.del{font-size:14px;color:var(--dark-gray);}
+.pin-error{color:var(--red);font-size:13px;margin-top:8px;display:none;}
+
+/* LAYOUT */
+.page-wrap{max-width:800px;margin:0 auto;padding:22px 14px 60px;}
+.page-title{font-size:21px;font-weight:700;color:var(--navy);margin-bottom:3px;}
+.page-subtitle{font-size:13px;color:var(--dark-gray);margin-bottom:20px;}
+
+/* CARDS */
+.card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden;}
+.card-header{background:var(--navy);color:#fff;padding:11px 16px;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
+.card-header .gold{color:var(--gold);}
+.card-body{padding:16px;}
+
+/* FORMS */
+.form-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;}
+.form-group{display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px;}
+.form-group label{font-size:11px;font-weight:700;color:var(--dark-gray);text-transform:uppercase;letter-spacing:.4px;}
+.form-group input,.form-group select,.form-group textarea{border:1.5px solid var(--mid-gray);border-radius:7px;padding:8px 11px;font-size:14px;color:var(--text);background:#fff;transition:border .15s;font-family:inherit;}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--navy);}
+
+/* PROPERTY TOGGLE */
+.prop-toggle{display:flex;gap:8px;margin-bottom:16px;}
+.prop-btn{flex:1;padding:10px;border-radius:8px;border:2px solid var(--light-gray);background:#fff;font-size:14px;font-weight:600;color:var(--dark-gray);cursor:pointer;transition:all .15s;text-align:center;}
+.prop-btn.active{border-color:var(--navy);background:var(--navy);color:#fff;}
+
+/* TASK CHECKLIST */
+.task-section{margin-bottom:5px;}
+.task-section-header{display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--off-white);border-radius:7px;cursor:pointer;user-select:none;border:1.5px solid transparent;transition:all .15s;}
+.task-section-header:hover{border-color:var(--gold);background:#fdf8ec;}
+.task-section-header.has-checked{background:#edf4f0;border-color:var(--green);}
+.custom-check{width:19px;height:19px;border:2px solid var(--mid-gray);border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;background:#fff;}
+.custom-check.checked{background:var(--green);border-color:var(--green);}
+.custom-check.checked::after{content:'✓';color:#fff;font-size:11px;font-weight:700;}
+.task-section-label{font-size:14px;font-weight:600;color:var(--navy);flex:1;}
+.task-subtasks{padding:6px 12px 6px 42px;display:none;}
+.task-subtasks.open{display:block;}
+.subtask-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--light-gray);cursor:pointer;}
+.subtask-item:last-child{border-bottom:none;}
+.subtask-item label{font-size:13px;color:var(--dark-gray);cursor:pointer;flex:1;}
+.subtask-note{margin:4px 0 4px 29px;}
+.subtask-note label{font-size:11px;color:var(--mid-gray);display:block;margin-bottom:2px;}
+.subtask-note input{width:100%;border:1.5px solid var(--light-gray);border-radius:6px;padding:6px 9px;font-size:13px;font-family:inherit;}
+.subtask-note input:focus{outline:none;border-color:var(--navy);}
+.count-badge{font-size:11px;background:var(--green);color:#fff;padding:2px 7px;border-radius:10px;font-weight:700;}
+.chevron{font-size:10px;color:var(--mid-gray);transition:transform .15s;}
+.chevron.open{transform:rotate(180deg);}
+
+/* BUTTONS */
+.btn{padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;font-family:inherit;}
+.btn-primary{background:var(--navy);color:#fff;} .btn-primary:hover{background:#243660;}
+.btn-gold{background:var(--gold);color:var(--navy);} .btn-gold:hover{background:#b8963e;}
+.btn-outline{background:transparent;border:1.5px solid var(--navy);color:var(--navy);} .btn-outline:hover{background:var(--navy);color:#fff;}
+.btn-sm{padding:6px 12px;font-size:12px;}
+.btn-danger{background:var(--red);color:#fff;} .btn-danger:hover{background:#6e1a1a;}
+.btn-ghost{background:transparent;border:1.5px solid var(--mid-gray);color:var(--dark-gray);} .btn-ghost:hover{border-color:var(--navy);color:var(--navy);}
+.btn-row{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px;}
+
+/* BILLING */
+.billing-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;}
+.billing-table th{text-align:left;padding:7px 9px;background:var(--off-white);color:var(--dark-gray);font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700;}
+.billing-table td{padding:7px 9px;border-bottom:1px solid var(--light-gray);vertical-align:middle;}
+.billing-table input{width:90px;border:1.5px solid var(--light-gray);border-radius:5px;padding:5px 7px;font-size:13px;font-family:inherit;text-align:right;}
+.billing-table input:focus{outline:none;border-color:var(--navy);}
+.billing-total{display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:11px 9px 0;font-size:15px;font-weight:700;color:var(--navy);border-top:2px solid var(--navy);margin-top:3px;}
+
+/* MATERIAL OUTPUT (walkthrough) */
+.material-output{background:var(--off-white);border-radius:var(--radius);padding:16px;margin-top:14px;}
+.material-category{margin-bottom:12px;}
+.material-category-title{font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.5px;padding-bottom:4px;border-bottom:1.5px solid var(--gold-light);margin-bottom:6px;}
+.material-item{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--light-gray);font-size:13px;}
+.material-item:last-child{border-bottom:none;}
+.material-item-qty{font-weight:600;color:var(--navy);background:var(--light-gray);padding:2px 7px;border-radius:4px;font-size:12px;}
+.material-item-qty.variable{background:var(--gold-light);color:#7a5c10;}
+.no-tasks-msg{text-align:center;color:var(--mid-gray);font-size:13px;padding:18px 0;}
+
+/* TRACKER */
+.turn-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:11px;overflow:hidden;border-left:4px solid var(--mid-gray);}
+.turn-card.status-active{border-left-color:var(--gold);}
+.turn-card.status-complete{border-left-color:var(--green);}
+.turn-card.status-overdue{border-left-color:var(--red);}
+.turn-card-top{display:flex;align-items:center;justify-content:space-between;padding:13px 15px 9px;gap:10px;flex-wrap:wrap;}
+.turn-unit{font-size:16px;font-weight:700;color:var(--navy);}
+.turn-property{font-size:12px;color:var(--dark-gray);font-weight:500;}
+.turn-due{font-size:12px;color:var(--dark-gray);}
+.turn-due.overdue{color:var(--red);font-weight:600;}
+.status-badge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.4px;}
+.badge-active{background:#fff8e6;color:#7a5c10;} .badge-complete{background:var(--green-light);color:var(--green);} .badge-overdue{background:var(--red-light);color:var(--red);}
+.turn-card-tasks{padding:0 15px 9px;display:flex;flex-wrap:wrap;gap:5px;}
+.task-chip{font-size:11px;background:var(--light-gray);color:var(--dark-gray);padding:2px 8px;border-radius:20px;font-weight:500;}
+.turn-card-actions{padding:9px 15px;border-top:1px solid var(--light-gray);display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
+.empty-state{text-align:center;padding:46px 20px;color:var(--mid-gray);}
+.empty-state .empty-icon{font-size:34px;margin-bottom:9px;}
+.empty-state p{font-size:14px;}
+
+/* MATERIALS TAB */
+.mat-turn-list{display:flex;flex-direction:column;gap:10px;margin-bottom:18px;}
+.mat-turn-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;border-left:4px solid var(--gold);}
+.mat-turn-header{display:flex;align-items:center;justify-content:space-between;padding:12px 15px;cursor:pointer;user-select:none;gap:10px;}
+.mat-turn-title{font-size:15px;font-weight:700;color:var(--navy);}
+.mat-turn-sub{font-size:12px;color:var(--dark-gray);}
+.mat-turn-body{display:none;padding:0 15px 14px;}
+.mat-turn-body.open{display:block;}
+
+/* MATERIAL ROWS WITH CHECKBOXES */
+.mat-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--light-gray);font-size:13px;}
+.mat-row:last-child{border-bottom:none;}
+.mat-row.delivered{opacity:.4;text-decoration:line-through;}
+.mat-row-name{flex:1;color:var(--text);}
+.mat-row-qty{font-weight:600;color:var(--navy);background:var(--light-gray);padding:2px 7px;border-radius:4px;font-size:12px;white-space:nowrap;}
+.mat-check-group{display:flex;gap:10px;align-items:center;flex-shrink:0;}
+.mat-check-label{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--dark-gray);cursor:pointer;white-space:nowrap;}
+.mat-check-label input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:var(--navy);}
+.mat-check-label.delivered-lbl input[type=checkbox]{accent-color:var(--green);}
+
+.master-section-title{font-size:12px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.5px;padding-bottom:5px;border-bottom:1.5px solid var(--gold-light);margin-bottom:8px;margin-top:12px;}
+.master-section-title:first-child{margin-top:0;}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(26,39,68,.7);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.hidden{display:none;}
+.modal-box{background:#fff;border-radius:14px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.25);}
+.modal-header{background:var(--navy);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-radius:14px 14px 0 0;}
+.modal-header h3{font-size:16px;font-weight:700;}
+.modal-close{background:transparent;border:none;color:rgba(255,255,255,.7);font-size:20px;cursor:pointer;line-height:1;}
+.modal-body{padding:18px;}
+.modal-footer{padding:12px 18px;border-top:1px solid var(--light-gray);display:flex;gap:8px;justify-content:flex-end;}
+.qty-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--light-gray);font-size:13px;}
+.qty-row:last-child{border-bottom:none;}
+.qty-row-label{flex:1;color:var(--text);}
+.qty-input{width:70px;border:1.5px solid var(--mid-gray);border-radius:6px;padding:5px 8px;font-size:14px;text-align:center;font-family:inherit;}
+.qty-input:focus{outline:none;border-color:var(--navy);}
+.qty-section-title{font-size:11px;font-weight:700;color:var(--dark-gray);text-transform:uppercase;letter-spacing:.4px;padding:10px 0 4px;border-bottom:1px solid var(--light-gray);margin-bottom:4px;}
+
+/* LANDING SCREEN */
+.landing-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px 20px;background:var(--navy);}
+.landing-logo-mark{width:72px;height:72px;background:var(--gold);border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:32px;color:var(--navy);margin:0 auto 14px;}
+.landing-title{color:#fff;font-size:26px;font-weight:800;text-align:center;margin-bottom:4px;}
+.landing-title span{color:var(--gold);}
+.landing-sub{color:rgba(255,255,255,.55);font-size:14px;text-align:center;margin-bottom:40px;}
+.landing-btn{width:100%;max-width:320px;padding:18px;border-radius:12px;border:none;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;margin-bottom:14px;display:block;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+.landing-btn-sub{background:#fff;color:var(--navy);}
+.landing-btn-sub:hover{background:var(--gold-light);}
+.landing-btn-admin{background:rgba(255,255,255,.12);color:#fff;border:2px solid rgba(255,255,255,.25);}
+.landing-btn-admin:hover{background:rgba(255,255,255,.2);}
+.landing-btn-icon{font-size:22px;margin-bottom:4px;display:block;}
+.landing-btn-label{display:block;font-size:16px;font-weight:700;}
+.landing-btn-desc{display:block;font-size:12px;font-weight:400;opacity:.65;margin-top:3px;}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--navy);color:#fff;padding:12px 22px;border-radius:10px;font-size:14px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.25);z-index:500;opacity:0;transition:all 0.3s ease;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.success{background:var(--green);}
+.toast.warning{background:#b87c10;}
+.toast.error{background:var(--red);}
+
+/* CONFIRM MODAL */
+.confirm-box{background:#fff;border-radius:14px;width:100%;max-width:400px;box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden;}
+.confirm-header{background:var(--navy);color:#fff;padding:14px 18px;font-size:15px;font-weight:700;}
+.confirm-body{padding:18px;font-size:14px;color:var(--dark-gray);line-height:1.5;}
+.confirm-footer{padding:12px 18px;border-top:1px solid var(--light-gray);display:flex;gap:8px;justify-content:flex-end;}
+
+/* SUB TASK PROGRESS */
+.sub-task-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--light-gray);cursor:pointer;user-select:none;}
+.sub-task-row:last-child{border-bottom:none;}
+.sub-task-row.done .sub-task-label{text-decoration:line-through;color:var(--mid-gray);}
+.sub-task-label{font-size:13px;color:var(--text);flex:1;}
+.ready-btn{width:100%;padding:14px;border-radius:10px;border:none;font-size:15px;font-weight:700;cursor:pointer;margin-top:16px;font-family:inherit;transition:all .2s;}
+.ready-btn.locked{background:var(--light-gray);color:var(--mid-gray);cursor:not-allowed;}
+.ready-btn.unlocked{background:var(--green);color:#fff;box-shadow:0 4px 14px rgba(45,106,79,.3);}
+.ready-btn.unlocked:hover{background:#235a40;}
+.stage-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:.4px;display:inline-block;margin-left:6px;}
+.stage-inprogress{background:#fff3cd;color:#7a5c10;}
+.stage-punchout{background:#fff0e6;color:#8b3a10;}
+.stage-subfix{background:#e8f0ff;color:#1a2744;}
+.stage-finalwalk{background:var(--green-light);color:var(--green);}
+
+/* PUNCH-OUT / FINAL WALK CARDS */
+.punchout-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden;border-left:4px solid #e87c2a;}
+.finalwalk-card{border-left-color:var(--green) !important;}
+.punchout-card-header{padding:13px 15px 10px;border-bottom:1px solid var(--light-gray);}
+.punchout-card-title{font-size:16px;font-weight:700;color:var(--navy);}
+.punchout-card-meta{font-size:12px;color:var(--dark-gray);margin-top:3px;}
+.date-added{font-size:11px;color:var(--mid-gray);margin-top:2px;}
+.punchout-card-body{padding:14px 15px;}
+.punchout-add-row{display:flex;gap:8px;margin-bottom:12px;}
+.punchout-add-row input{flex:1;border:1.5px solid var(--mid-gray);border-radius:7px;padding:8px 11px;font-size:13px;font-family:inherit;}
+.punchout-add-row input:focus{outline:none;border-color:var(--navy);}
+.punchout-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--light-gray);font-size:13px;cursor:pointer;user-select:none;}
+.punchout-item:last-child{border-bottom:none;}
+.punchout-item.done .punchout-item-label{text-decoration:line-through;color:var(--mid-gray);}
+.punchout-item-label{flex:1;}
+.punchout-item-del{background:none;border:none;color:var(--mid-gray);cursor:pointer;font-size:15px;padding:0 4px;line-height:1;flex-shrink:0;}
+.punchout-item-del:hover{color:var(--red);}
+.progress-bar-wrap{height:6px;background:var(--light-gray);border-radius:3px;margin:10px 0 4px;}
+.progress-bar{height:6px;background:var(--green);border-radius:3px;transition:width .3s;}
+.progress-label{font-size:11px;color:var(--dark-gray);margin-bottom:10px;}
+
+/* TRACKER ACCORDION */
+.turn-card-accordion{display:none;border-top:1px solid var(--light-gray);}
+.turn-card-accordion.open{display:block;}
+.accordion-body{padding:14px 15px;}
+.accordion-section-title{font-size:11px;font-weight:700;color:var(--dark-gray);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 7px;}
+.accordion-section-title:first-child{margin-top:0;}
+.acc-task-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--light-gray);font-size:13px;}
+.acc-task-row:last-child{border-bottom:none;}
+.acc-task-label{flex:1;color:var(--text);}
+.acc-task-label.done{text-decoration:line-through;color:var(--mid-gray);}
+.acc-note-row{padding:8px 10px;background:var(--off-white);border-radius:7px;margin-bottom:6px;font-size:13px;}
+.acc-note-time{font-size:10px;color:var(--mid-gray);margin-top:2px;}
+.flag-badge{display:inline-flex;align-items:center;gap:3px;background:#fff3cd;color:#7a5c10;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px;}
+.task-chip.chip-done{background:var(--green-light);color:var(--green);font-weight:700;}
+.turn-card-top{cursor:pointer;}
+  .page-title{font-size:18px;}
+  .form-row{flex-direction:column;}
+  .mat-check-group{flex-direction:column;gap:4px;align-items:flex-end;}
+}
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay hidden" id="confirmModal">
+  <div class="confirm-box">
+    <div class="confirm-header" id="confirmTitle">Confirm</div>
+    <div class="confirm-body" id="confirmBody"></div>
+    <div class="confirm-footer" id="confirmFooter"></div>
+  </div>
+</div>
+
+<!-- PIN OVERLAY -->
+<div class="pin-overlay" id="pinOverlay">
+  <div class="pin-box">
+    <div class="pin-logo">FS</div>
+    <h2>Internal Access</h2>
+    <p>Enter your PIN to continue</p>
+    <div class="pin-dots">
+      <div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div>
+      <div class="pin-dot" id="d4"></div><div class="pin-dot" id="d5"></div>
+      <div class="pin-dot" id="d6"></div><div class="pin-dot" id="d7"></div>
+    </div>
+    <div class="pin-keypad">
+      <button class="pin-key" id="pk1">1</button><button class="pin-key" id="pk2">2</button><button class="pin-key" id="pk3">3</button>
+      <button class="pin-key" id="pk4">4</button><button class="pin-key" id="pk5">5</button><button class="pin-key" id="pk6">6</button>
+      <button class="pin-key" id="pk7">7</button><button class="pin-key" id="pk8">8</button><button class="pin-key" id="pk9">9</button>
+      <button class="pin-key del" id="pkdel">⌫</button><button class="pin-key" id="pk0">0</button><button class="pin-key" id="pkenter">↵</button>
+    </div>
+    <div class="pin-error" id="pinError">Incorrect PIN. Try again.</div>
+  </div>
+</div>
+
+<!-- VARIABLE QUANTITY MODAL -->
+<div class="modal-overlay hidden" id="qtyModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Enter Quantities</h3>
+      <button class="modal-close" onclick="closeQtyModal()">✕</button>
+    </div>
+    <div class="modal-body" id="qtyModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeQtyModal()">Cancel</button>
+      <button class="btn btn-gold btn-sm" onclick="confirmSave()">Save Turn</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT TURN MODAL -->
+<div class="modal-overlay hidden" id="editModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Edit Turn</h3>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="modal-body" id="editModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-gold btn-sm" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- LANDING SCREEN -->
+<div class="screen active" id="screen-landing">
+  <div class="landing-wrap">
+    <div class="landing-logo-mark">FS</div>
+    <div class="landing-title">Full<span>Scope</span> Services</div>
+    <div class="landing-sub">Unit Turn Management</div>
+    <button class="landing-btn landing-btn-sub" onclick="enterAsSub()">
+      <span class="landing-btn-icon">🔨</span>
+      <span class="landing-btn-label">Subcontractor</span>
+      <span class="landing-btn-desc">View your assigned tasks</span>
+    </button>
+    <button class="landing-btn landing-btn-admin" onclick="enterAsAdmin()">
+      <span class="landing-btn-icon">🔒</span>
+      <span class="landing-btn-label">Admin</span>
+      <span class="landing-btn-desc">FullScope internal access</span>
+    </button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header class="app-header" id="appHeader" style="display:none;">
+  <div class="logo">
+    <div class="logo-mark">FS</div>
+    <div class="logo-text">Full<span>Scope</span></div>
+  </div>
+  <div class="header-nav" id="headerNav">
+    <button class="nav-btn" onclick="showScreen('sub')" id="nav-sub">📋 <span>My Tasks</span></button>
+    <button class="nav-btn admin-only" onclick="showScreen('walkthrough')" id="nav-walkthrough">🔍 <span>Walkthrough</span></button>
+    <button class="nav-btn admin-only" onclick="showScreen('tracker')" id="nav-tracker">📊 <span>Tracker</span></button>
+    <button class="nav-btn admin-only" onclick="showScreen('materials')" id="nav-materials">🧰 <span>Materials</span></button>
+    <button class="nav-btn admin-only" onclick="showScreen('punchout')" id="nav-punchout">🔎 <span>Punch-Out</span></button>
+    <button class="nav-btn admin-only" onclick="showScreen('finalwalk')" id="nav-finalwalk">✅ <span>Final</span></button>
+    <button class="nav-btn lock-btn" onclick="goToLanding()">🏠</button>
+  </div>
+</header>
+
+<!-- SUB SCREEN -->
+<div class="screen" id="screen-sub">
+  <div class="page-wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <div class="page-title">My Unit Tasks</div>
+        <div class="page-subtitle" style="margin-bottom:0;">Enter your job code to view your assigned scope</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">🔑 Job Access</div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Unit / Job Code</label>
+            <input type="text" id="subJobCode" placeholder="e.g. 204B" oninput="this.value=this.value.toUpperCase()">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="loadSubView()">View My Tasks</button>
+      </div>
+    </div>
+    <div id="subTaskView"></div>
+  </div>
+</div>
+
+<!-- WALKTHROUGH SCREEN -->
+<div class="screen" id="screen-walkthrough">
+  <div class="page-wrap">
+    <div class="page-title">Unit Walkthrough</div>
+    <div class="page-subtitle">Check tasks, generate materials, and save the turn</div>
+
+    <div class="card">
+      <div class="card-header">🏠 Unit Info</div>
+      <div class="card-body">
+        <div class="prop-toggle">
+          <button class="prop-btn active" id="prop-orchards" onclick="selectProperty('Orchards')">🌳 Orchards</button>
+          <button class="prop-btn" id="prop-woodlands" onclick="selectProperty('Woodlands')">🌲 Woodlands</button>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Unit Number</label><input type="text" id="unitNumber" placeholder="e.g. 204B"></div>
+          <div class="form-group"><label>Due Date</label><input type="date" id="dueDate"></div>
+          <div class="form-group"><label>Subcontractor (optional)</label><input type="text" id="subName" placeholder="Name or business"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">✅ Task Checklist</div>
+      <div class="card-body" id="taskChecklist"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">💰 <span class="gold">Billing</span> <span style="font-size:10px;opacity:0.7;font-weight:400;margin-left:4px;">— Subcontractor rates auto-populated · editable</span></div>
+      <div class="card-body">
+        <table class="billing-table">
+          <thead><tr><th>Task</th><th style="text-align:right">Price ($)</th></tr></thead>
+          <tbody id="billingRows"></tbody>
+        </table>
+        <div class="billing-total"><span>Total:</span><span id="billingTotal">$0.00</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">🧰 <span class="gold">Material Preview</span></div>
+      <div class="card-body">
+        <p style="font-size:13px;color:var(--dark-gray);margin-bottom:10px;">Fixed items auto-populate. Enter quantities for variable items below — enter 0 to exclude.</p>
+        <div id="materialOutput"><div class="no-tasks-msg">Check tasks above to preview materials.</div></div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-gold" onclick="initSave()">💾 Save Turn</button>
+      <button class="btn btn-outline" onclick="window.print()">🖨 Print</button>
+      <button class="btn btn-ghost" onclick="resetWalkthrough()">↺ Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- TRACKER SCREEN -->
+<div class="screen" id="screen-tracker">
+  <div class="page-wrap">
+    <div class="page-title">Turn Tracker</div>
+    <div class="page-subtitle">All active and completed unit turns</div>
+    <div id="trackerList"></div>
+  </div>
+</div>
+
+<!-- PUNCH-OUT SCREEN -->
+<div class="screen" id="screen-punchout">
+  <div class="page-wrap">
+    <div class="page-title">Punch-Out</div>
+    <div class="page-subtitle">Units awaiting punch-out walkthrough — add items to the punch-out list</div>
+    <div id="punchoutList"></div>
+  </div>
+</div>
+
+<!-- FINAL WALKTHROUGH SCREEN -->
+<div class="screen" id="screen-finalwalk">
+  <div class="page-wrap">
+    <div class="page-title">Final Walkthrough</div>
+    <div class="page-subtitle">Units ready for final inspection — mark complete to close the turn</div>
+    <div id="finalwalkList"></div>
+  </div>
+</div>
+
+<!-- MATERIALS SCREEN -->
+<div class="screen" id="screen-materials">
+  <div class="page-wrap">
+    <div class="page-title">Materials</div>
+    <div class="page-subtitle">Track ordered and delivered materials per unit and across all active turns</div>
+
+    <!-- MASTER LIST -->
+    <div class="card">
+      <div class="card-header">📦 <span class="gold">Master Material List</span></div>
+      <div class="card-body" id="masterMatBody">
+        <div class="no-tasks-msg">No active turns with materials found.</div>
+      </div>
+    </div>
+
+    <!-- PER-TURN LIST -->
+    <div class="card">
+      <div class="card-header">🏠 Materials by Unit</div>
+      <div class="card-body" style="padding:12px;">
+        <div id="perTurnMatList"><div class="no-tasks-msg">No active turns found.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── ROLE & PIN ───────────────────────────────────────
+const CORRECT_PIN = '04040000';
+let pinInput = '';
+let isUnlocked = false;
+let currentRole = null; // 'sub' or 'admin'
+let pendingScreen = null;
+
+function enterAsSub(){
+  currentRole='sub';
+  document.getElementById('appHeader').style.display='flex';
+  document.querySelectorAll('.admin-only').forEach(el=>el.style.display='none');
+  showScreen('sub');
+  document.getElementById('nav-sub').classList.add('active');
+}
+
+function enterAsAdmin(){
+  pendingScreen='walkthrough';
+  document.getElementById('pinOverlay').classList.remove('hidden');
+}
+
+function goToLanding(){
+  currentRole=null; isUnlocked=false; pinInput=''; updateDots();
+  document.getElementById('appHeader').style.display='none';
+  document.querySelectorAll('.admin-only').forEach(el=>el.style.display='');
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-landing').classList.add('active');
+}
+
+function pinKey(k){ if(pinInput.length>=8)return; pinInput+=k; updateDots(); }
+function pinDel(){ pinInput=pinInput.slice(0,-1); updateDots(); }
+function updateDots(){ for(let i=0;i<8;i++) document.getElementById('d'+i).classList.toggle('filled',i<pinInput.length); }
+
+function pinSubmit(){
+  if(pinInput===CORRECT_PIN){
+    isUnlocked=true;
+    currentRole='admin';
+    document.getElementById('pinOverlay').classList.add('hidden');
+    document.getElementById('pinError').style.display='none';
+    document.getElementById('appHeader').style.display='flex';
+    document.querySelectorAll('.admin-only').forEach(el=>el.style.display='');
+    pinInput=''; updateDots();
+    showScreen(pendingScreen||'walkthrough');
+    pendingScreen=null;
+  } else {
+    document.getElementById('pinError').style.display='block'; pinInput=''; updateDots();
+  }
+}
+
+function requirePin(s){
+  if(isUnlocked){ showScreen(s); }
+  else { pendingScreen=s; document.getElementById('pinOverlay').classList.remove('hidden'); }
+}
+
+function lockApp(){ goToLanding(); }
+// PIN keypad — bind with both touchend and click for mobile compatibility
+function bindPinKey(id, action){
+  const el=document.getElementById(id); if(!el) return;
+  const handler=(e)=>{ e.preventDefault(); e.stopPropagation(); action(); };
+  el.addEventListener('touchend', handler, {passive:false});
+  el.addEventListener('click', handler);
+}
+function initPinKeypad(){
+  ['1','2','3','4','5','6','7','8','9','0'].forEach(k=>bindPinKey('pk'+k,()=>pinKey(k)));
+  bindPinKey('pkdel', pinDel);
+  bindPinKey('pkenter', pinSubmit);
+}
+document.addEventListener('keydown',e=>{
+  if(!document.getElementById('pinOverlay').classList.contains('hidden')){
+    if(e.key>='0'&&e.key<='9') pinKey(e.key);
+    else if(e.key==='Backspace') pinDel();
+    else if(e.key==='Enter') pinSubmit();
+  }
+});
+
+// ─── NAV ──────────────────────────────────────────────
+function showScreen(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+  const nb=document.getElementById('nav-'+name); if(nb) nb.classList.add('active');
+  if(name==='tracker') renderTracker();
+  if(name==='materials') renderMaterials();
+  if(name==='punchout') renderPunchout();
+  if(name==='finalwalk') renderFinalWalk();
+}
+
+// ─── DATA DEFINITIONS ─────────────────────────────────
+let selectedProperty = 'Orchards';
+
+const TASKS = [
+  { id:'demo', label:'Demo', subtasks:[
+    { id:'carpet_bedrooms', label:'Carpet Removal – Bedrooms' },
+    { id:'carpet_full', label:'Carpet Removal – Full Unit' },
+    { id:'trash_out', label:'Trash Out' }
+  ]},
+  { id:'paint', label:'Paint', subtasks:[
+    { id:'paint_full', label:'Full Paint' },
+    { id:'paint_touchup', label:'Touch Up Paint' },
+    { id:'paint_ceilings', label:'Ceilings' }
+  ]},
+  { id:'flooring', label:'Flooring', subtasks:[
+    { id:'floor_full', label:'Full Unit' },
+    { id:'floor_living', label:'Living Room / Dining / Kitchen' },
+    { id:'floor_bedrooms', label:'Bedrooms Only' }
+  ]},
+  { id:'general', label:'General Turn', subtasks:[
+    { id:'gen_electrical', label:'Electrical', note:'Notes' },
+    { id:'gen_plumbing', label:'Plumbing', note:'Notes' },
+    { id:'gen_countertops', label:'Countertops' },
+    { id:'gen_blinds', label:'Blinds', note:'Notes' },
+    { id:'gen_appliances', label:'Appliances', note:'Notes' },
+    { id:'gen_blackbars', label:'Black Bars' },
+    { id:'gen_vanity', label:'Vanity Mirror / Medicine Cabinet' },
+    { id:'gen_other', label:'Other', note:'Notes' }
+  ]},
+  { id:'doors', label:'Doors', subtasks:[] },
+  { id:'cabinets', label:'Cabinets', subtasks:[] },
+  { id:'addons', label:'Add-ons', subtasks:[
+    { id:'addon_drywall', label:'Drywall Patch / Repair', note:'Notes' },
+    { id:'addon_other', label:'Other', note:'Notes' }
+  ]}
+];
+
+const TASK_LABELS = {
+  carpet_bedrooms:'Carpet Removal – Bedrooms', carpet_full:'Carpet Removal – Full Unit',
+  trash_out:'Trash Out', paint_full:'Full Paint', paint_touchup:'Touch Up Paint',
+  paint_ceilings:'Ceilings', floor_full:'Flooring – Full Unit',
+  floor_living:'Flooring – Living/Dining/Kitchen', floor_bedrooms:'Flooring – Bedrooms',
+  gen_electrical:'Electrical', gen_plumbing:'Plumbing', gen_countertops:'Countertops',
+  gen_blinds:'Blinds', gen_appliances:'Appliances', gen_blackbars:'Black Bars',
+  gen_vanity:'Vanity Mirror / Medicine Cabinet', gen_other:'Other',
+  doors:'Doors', cabinets:'Cabinets',
+  addon_drywall:'Drywall Patch / Repair', addon_other:'Other (Add-on)'
+};
+
+// Fixed materials (no quantity prompt needed)
+const FIXED_MATERIALS = {
+  carpet_bedrooms:[], carpet_full:[], trash_out:[],
+  paint_full:[{name:'Wall Paint',qty:'2–5 Gallons',cat:'Paint'}],
+  paint_touchup:[{name:'Wall Paint',qty:'1–5 Gallons',cat:'Paint'}],
+  paint_ceilings:[{name:'Ceiling Paint (Color TBD)',qty:'1–5 Gallons',cat:'Paint'}],
+  floor_full:[{name:'LVP Flooring',qty:'27 Boxes',cat:'Flooring'},{name:'Cove Base',qty:'3 Boxes',cat:'Flooring'},{name:'Cove Base Glue',qty:'20 Tubes',cat:'Flooring'}],
+  floor_living:[{name:'LVP Flooring',qty:'18 Boxes',cat:'Flooring'},{name:'Cove Base',qty:'2 Boxes',cat:'Flooring'},{name:'Cove Base Glue',qty:'12 Tubes',cat:'Flooring'}],
+  floor_bedrooms:[{name:'LVP Flooring',qty:'10 Boxes',cat:'Flooring'},{name:'Cove Base',qty:'1 Box',cat:'Flooring'},{name:'Cove Base Glue',qty:'6 Tubes',cat:'Flooring'}],
+  gen_electrical_Orchards:[{name:'Long Light',qty:'1',cat:'Electrical'},{name:'Round Lights',qty:'3',cat:'Electrical'},{name:'Bathroom Light Bar',qty:'1',cat:'Electrical'}],
+  gen_electrical_Woodlands:[{name:'Long Light',qty:'1',cat:'Electrical'},{name:'Round Lights',qty:'2',cat:'Electrical'},{name:'Bathroom Light Bar',qty:'1',cat:'Electrical'},{name:'Pull-String Light',qty:'1',cat:'Electrical'},{name:'Ceiling Fans',qty:'2',cat:'Electrical'},{name:'Switches – 3 Way',qty:'4',cat:'Electrical'},{name:'Switches – Single Pole',qty:'8',cat:'Electrical'},{name:'GFCIs',qty:'3',cat:'Electrical'},{name:'Plates – Outlet Covers',qty:'15',cat:'Electrical'},{name:'Plates – Double Switch',qty:'2',cat:'Electrical'},{name:'Plates – Triple Switch',qty:'1',cat:'Electrical'},{name:'Plates – Single Switch',qty:'5',cat:'Electrical'},{name:'Plates – Blanks',qty:'4',cat:'Electrical'},{name:'Plates – Coax',qty:'3',cat:'Electrical'}],
+  gen_plumbing:[{name:'Bathroom Faucet',qty:'1',cat:'Plumbing'},{name:'Kitchen Faucet',qty:'1',cat:'Plumbing'},{name:'Shower Head',qty:'1',cat:'Plumbing'}],
+  gen_countertops_Orchards:[{name:"8' Section (Straight)",qty:'1',cat:'Countertops'},{name:"4' Section (Straight)",qty:'1',cat:'Countertops'},{name:'Spacer Bundle',qty:'1',cat:'Countertops'}],
+  gen_countertops_Woodlands:[{name:"10' Section (Left/Right Miter)",qty:'1',cat:'Countertops'},{name:"6' Section (Left/Right Miter)",qty:'1',cat:'Countertops'},{name:'Spacer Bundle',qty:'1',cat:'Countertops'}],
+  gen_blinds:[{name:'47" Blinds',qty:'3',cat:'Blinds'},{name:'23" Blinds',qty:'2',cat:'Blinds'}],
+  gen_blackbars:[{name:'Black Bar Set',qty:'1',cat:'Black Bars'}],
+  gen_vanity_Orchards:[{name:'Round Mirror',qty:'1',cat:'Vanity Mirror / Medicine Cabinet'}],
+  gen_vanity_Woodlands:[{name:'Medicine Cabinet',qty:'1',cat:'Vanity Mirror / Medicine Cabinet'}],
+  gen_other:[{name:'Custom (see notes)',qty:'See notes',cat:'Other'}],
+  addons:[{name:'Custom (see notes)',qty:'See notes',cat:'Add-ons'}]
+};
+
+// ─── SUBCONTRACTOR PRICING ────────────────────────────
+// Keyed by property then task id. General Turn uses 'general_full' and 'general_partial'.
+// Doors priced per door ($70 each) — multiplied by quantity at billing time.
+// Cabinets priced per unit ($55 each).
+const SUB_PRICING = {
+  Orchards: {
+    carpet_bedrooms: 145, carpet_full: 145, trash_out: 70,
+    paint_full: 435, paint_touchup: 250, paint_ceilings: 70,
+    floor_full: 865, floor_living: 650, floor_bedrooms: 435,
+    general_full: 435, general_partial: 215,
+    doors: 70, cabinets: 55,
+    addon_drywall: null, addon_other: null
+  },
+  Woodlands: {
+    carpet_bedrooms: 145, carpet_full: 145, trash_out: 70,
+    paint_full: 500, paint_touchup: 250, paint_ceilings: 70,
+    floor_full: 865, floor_living: 650, floor_bedrooms: 435,
+    general_full: 500, general_partial: 215,
+    doors: 70, cabinets: 55,
+    addon_drywall: null, addon_other: null
+  }
+};
+
+// Variable quantity items — prompted on save
+// Returns array of {key, label, cat, autoQty (optional)} where autoQty means auto-fill
+function getVariableItems(checkedTasks, property) {
+  const items = [];
+  const hasPaintFull    = checkedTasks['paint_full'];
+  const hasPaintTouchup = checkedTasks['paint_touchup'];
+
+  // Spray Texture — appears for Full Paint or Touchup (deduplicated, one input)
+  if(hasPaintFull || hasPaintTouchup){
+    items.push({key:'spray_texture', label:'Spray Texture – Orange Peel', cat:'Paint', unit:'can(s)'});
+  }
+  // Drywall Mud — deduplicated, one input for both Full and Touchup
+  if(hasPaintFull || hasPaintTouchup){
+    items.push({key:'drywall_mud', label:'Drywall Mud', cat:'Paint', unit:'container(s)'});
+  }
+  if(checkedTasks['gen_plumbing']){
+    items.push({key:'ptrap', label:'1½" P-Trap Kits', cat:'Plumbing', unit:'kit(s)'});
+  }
+  if(checkedTasks['gen_appliances']){
+    items.push({key:'fridge',     label:'Fridge',     cat:'Appliances', unit:'unit(s)'});
+    items.push({key:'stove',      label:'Stove ('+(property==='Woodlands'?'Gas':'Electric')+')', cat:'Appliances', unit:'unit(s)'});
+    items.push({key:'microwave',  label:'Microwave',  cat:'Appliances', unit:'unit(s)'});
+    items.push({key:'dishwasher', label:'Dishwasher', cat:'Appliances', unit:'unit(s)'});
+  }
+  if(checkedTasks['doors']){
+    items.push({key:'door24', label:'24" Door', cat:'Doors', unit:'door(s)'});
+    items.push({key:'door28', label:'28" Door', cat:'Doors', unit:'door(s)'});
+    items.push({key:'door30', label:'30" Door', cat:'Doors', unit:'door(s)'});
+    items.push({key:'door32', label:'32" Door', cat:'Doors', unit:'door(s)'});
+  }
+  if(checkedTasks['cabinets']){
+    items.push({key:'cab_boxes', label:'Replacement Cabinet Boxes (measurements TBD)', cat:'Cabinets', unit:'unit(s)'});
+    if(property==='Woodlands') items.push({key:'cab_faces', label:'Replacement Cabinet Faces', cat:'Cabinets', unit:'unit(s)'});
+  }
+  return items;
+}
+
+// ─── WALKTHROUGH STATE ────────────────────────────────
+let checkedTasks = {};
+let taskNotes = {};
+let billingPrices = {};
+let openSections = {};
+let varQtys = {};
+let generalTurnType = 'full'; // 'full' or 'partial'
+
+function selectProperty(p){
+  selectedProperty=p;
+  varQtys={};
+  generalTurnType='full';
+  document.getElementById('prop-orchards').classList.toggle('active',p==='Orchards');
+  document.getElementById('prop-woodlands').classList.toggle('active',p==='Woodlands');
+  renderMaterialPreview();
+  renderBilling();
+}
+
+// ─── CHECKLIST ────────────────────────────────────────
+function toggleTask(id, state){
+  const task = TASKS.find(t=>t.id===id);
+  if(task && task.subtasks && task.subtasks.length>0){
+    openSections[id] = !openSections[id];
+  } else {
+    checkedTasks[id] = state;
+    TASKS.forEach(t=>{ if(t.subtasks && t.subtasks.find(s=>s.id===id)) openSections[t.id]=true; });
+  }
+  renderChecklist();
+}
+
+function renderChecklist(){
+  const wrap = document.getElementById('taskChecklist');
+  wrap.innerHTML='';
+  TASKS.forEach(task=>{
+    const hasSubs = task.subtasks && task.subtasks.length>0;
+    const parentChecked = hasSubs ? task.subtasks.some(s=>checkedTasks[s.id]) : !!checkedTasks[task.id];
+    const isOpen = hasSubs ? (openSections[task.id]||task.subtasks.some(s=>checkedTasks[s.id])) : false;
+
+    const section = document.createElement('div'); section.className='task-section';
+    const header = document.createElement('div');
+    header.className='task-section-header'+(parentChecked?' has-checked':'');
+    header.onclick=()=>toggleTask(task.id,!checkedTasks[task.id]);
+
+    const chk = document.createElement('div');
+    chk.className='custom-check'+(parentChecked?' checked':'');
+    const lbl = document.createElement('div'); lbl.className='task-section-label'; lbl.textContent=task.label;
+
+    header.appendChild(chk); header.appendChild(lbl);
+
+    if(hasSubs){
+      if(parentChecked){
+        const cnt = task.subtasks.filter(s=>checkedTasks[s.id]).length;
+        const badge=document.createElement('span'); badge.className='count-badge'; badge.textContent=cnt+'/'+task.subtasks.length;
+        header.appendChild(badge);
+      }
+      const chev=document.createElement('span'); chev.className='chevron'+(isOpen?' open':''); chev.textContent='▼';
+      header.appendChild(chev);
+    }
+    section.appendChild(header);
+
+    if(hasSubs){
+      const sw=document.createElement('div'); sw.className='task-subtasks'+(isOpen?' open':'');
+      task.subtasks.forEach(sub=>{
+        const item=document.createElement('div'); item.className='subtask-item';
+        item.onclick=(e)=>{e.stopPropagation();toggleTask(sub.id,!checkedTasks[sub.id]);};
+        const sc=document.createElement('div'); sc.className='custom-check'+(checkedTasks[sub.id]?' checked':'');
+        const sl=document.createElement('label'); sl.textContent=sub.label;
+        item.appendChild(sc); item.appendChild(sl); sw.appendChild(item);
+        if(sub.note && checkedTasks[sub.id]){
+          const nw=document.createElement('div'); nw.className='subtask-note';
+          const nl=document.createElement('label'); nl.textContent=sub.note+':';
+          const ni=document.createElement('input'); ni.type='text'; ni.placeholder='Add notes...';
+          ni.value=taskNotes[sub.id]||'';
+          ni.oninput=(e)=>{taskNotes[sub.id]=e.target.value;};
+          ni.onclick=(e)=>e.stopPropagation();
+          nw.appendChild(nl); nw.appendChild(ni); sw.appendChild(nw);
+        }
+      });
+      section.appendChild(sw);
+    } else {
+      if(task.note && checkedTasks[task.id]){
+        const nw=document.createElement('div'); nw.className='subtask-note';
+        const nl=document.createElement('label'); nl.textContent=task.note+':';
+        const ni=document.createElement('input'); ni.type='text'; ni.placeholder='Add notes...';
+        ni.value=taskNotes[task.id]||''; ni.oninput=(e)=>{taskNotes[task.id]=e.target.value;};
+        nw.appendChild(nl); nw.appendChild(ni); section.appendChild(nw);
+      }
+    }
+    wrap.appendChild(section);
+  });
+  renderBilling(); renderMaterialPreview();
+}
+
+// ─── BILLING ──────────────────────────────────────────
+const GENERAL_TURN_SUBTASK_IDS = new Set(['gen_electrical','gen_plumbing','gen_countertops','gen_blinds','gen_appliances','gen_blackbars','gen_vanity','gen_other']);
+
+function getAutoPrice(id){
+  const pricing = SUB_PRICING[selectedProperty];
+  if(!pricing) return null;
+  // General Turn subtasks don't get individual prices — handled by the General Turn row
+  if(GENERAL_TURN_SUBTASK_IDS.has(id)) return null;
+  if(id==='doors'){
+    const totalDoors = (varQtys['door24']||0)+(varQtys['door28']||0)+(varQtys['door30']||0)+(varQtys['door32']||0);
+    return totalDoors > 0 ? totalDoors * pricing.doors : pricing.doors;
+  }
+  if(id==='cabinets') return pricing.cabinets || null;
+  return pricing[id] !== undefined ? pricing[id] : null;
+}
+
+function hasAnyGeneralTurnChecked(){
+  return Array.from(GENERAL_TURN_SUBTASK_IDS).some(id=>checkedTasks[id]);
+}
+
+function renderBilling(){
+  const tbody=document.getElementById('billingRows'); tbody.innerHTML='';
+  let hasAny=false;
+  const pricing=SUB_PRICING[selectedProperty];
+
+  const allIds=[];
+  TASKS.forEach(t=>{
+    if(t.subtasks&&t.subtasks.length) t.subtasks.forEach(s=>allIds.push(s.id));
+    else allIds.push(t.id);
+  });
+
+  // Track if we've added the General Turn row already
+  let generalTurnRowAdded=false;
+
+  allIds.forEach(id=>{
+    if(!checkedTasks[id]) return;
+
+    // General Turn subtasks: add one combined row the first time any is checked
+    if(GENERAL_TURN_SUBTASK_IDS.has(id)){
+      if(generalTurnRowAdded) return;
+      generalTurnRowAdded=true;
+      hasAny=true;
+
+      const autoPrice=generalTurnType==='full' ? pricing.general_full : pricing.general_partial;
+      billingPrices['general_turn']=autoPrice;
+
+      const tr=document.createElement('tr');
+      // Label cell with dropdown
+      const td1=document.createElement('td');
+      td1.style.verticalAlign='middle';
+      const labelWrap=document.createElement('div');
+      labelWrap.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+      const lbl=document.createElement('span');
+      lbl.style.cssText='font-size:13px;font-weight:600;color:var(--navy);';
+      lbl.textContent='General Turn';
+      const sel=document.createElement('select');
+      sel.style.cssText='border:1.5px solid var(--mid-gray);border-radius:6px;padding:4px 8px;font-size:12px;font-family:inherit;color:var(--text);cursor:pointer;';
+      ['full','partial'].forEach(opt=>{
+        const o=document.createElement('option');
+        o.value=opt;
+        o.textContent=opt==='full'?'Full Turn':'Partial Turn';
+        if(opt===generalTurnType) o.selected=true;
+        sel.appendChild(o);
+      });
+      sel.onchange=(e)=>{
+        generalTurnType=e.target.value;
+        const newPrice=generalTurnType==='full' ? pricing.general_full : pricing.general_partial;
+        billingPrices['general_turn']=newPrice;
+        renderBilling();
+      };
+      labelWrap.appendChild(lbl); labelWrap.appendChild(sel);
+      td1.appendChild(labelWrap);
+
+      // Price cell — shown as auto-filled read-only display + hidden in billingPrices
+      const td2=document.createElement('td'); td2.style.textAlign='right';
+      const priceDisp=document.createElement('span');
+      priceDisp.style.cssText='font-size:14px;font-weight:700;color:var(--navy);';
+      priceDisp.textContent='$'+(autoPrice||0).toFixed(2);
+      td2.appendChild(priceDisp);
+
+      tr.appendChild(td1); tr.appendChild(td2); tbody.appendChild(tr);
+      updateTotal();
+      return;
+    }
+
+    // Add-ons subtasks — manual price input, no auto-price
+    if(id==='addon_drywall'||id==='addon_other'){
+      hasAny=true;
+      const tr=document.createElement('tr');
+      const td1=document.createElement('td'); td1.textContent=TASK_LABELS[id]||id;
+      const td2=document.createElement('td'); td2.style.textAlign='right';
+      const inp=document.createElement('input'); inp.type='number'; inp.placeholder='Enter price';
+      inp.style.cssText='width:90px;border:1.5px solid var(--gold);border-radius:5px;padding:5px 7px;font-size:13px;font-family:inherit;text-align:right;';
+      inp.value=billingPrices[id]||'';
+      inp.oninput=(e)=>{billingPrices[id]=parseFloat(e.target.value)||0; updateTotal();};
+      td2.appendChild(inp); tr.appendChild(td1); tr.appendChild(td2); tbody.appendChild(tr);
+      return;
+    }
+
+    // All other tasks — auto-price with editable override
+    hasAny=true;
+    const autoPrice=getAutoPrice(id);
+    if(autoPrice!==null && billingPrices[id]===undefined) billingPrices[id]=autoPrice;
+
+    const tr=document.createElement('tr');
+    const td1=document.createElement('td');
+    const nameWrap=document.createElement('div');
+    nameWrap.style.cssText='display:flex;align-items:center;gap:6px;';
+    const nameSpan=document.createElement('span'); nameSpan.textContent=TASK_LABELS[id]||id;
+    nameWrap.appendChild(nameSpan);
+    if(autoPrice!==null){
+      const badge=document.createElement('span');
+      badge.style.cssText='font-size:10px;background:var(--green-light);color:var(--green);padding:1px 6px;border-radius:8px;font-weight:700;';
+      badge.textContent='auto';
+      nameWrap.appendChild(badge);
+    }
+    td1.appendChild(nameWrap);
+    const td2=document.createElement('td'); td2.style.textAlign='right';
+    const inp=document.createElement('input'); inp.type='number'; inp.placeholder='0.00';
+    inp.value=billingPrices[id]!==undefined?billingPrices[id]:(autoPrice||'');
+    inp.oninput=(e)=>{billingPrices[id]=parseFloat(e.target.value)||0; updateTotal();};
+    td2.appendChild(inp); tr.appendChild(td1); tr.appendChild(td2); tbody.appendChild(tr);
+  });
+
+  if(!hasAny) tbody.innerHTML='<tr><td colspan="2" style="text-align:center;color:var(--mid-gray);padding:12px;font-size:13px;">No tasks checked yet</td></tr>';
+  updateTotal();
+}
+
+function updateTotal(){
+  // Sum all billingPrices including general_turn
+  const t=Object.entries(billingPrices).reduce((sum,[key,val])=>{
+    // Don't double-count general turn subtasks — they're rolled into general_turn key
+    if(GENERAL_TURN_SUBTASK_IDS.has(key)) return sum;
+    return sum+(val||0);
+  },0);
+  document.getElementById('billingTotal').textContent='$'+t.toFixed(2);
+}
+
+// ─── MATERIAL PREVIEW (walkthrough) ──────────────────
+function getFixedKey(id){ return [id+'_'+selectedProperty, id].find(k=>FIXED_MATERIALS[k]!==undefined)||null; }
+
+function renderMaterialPreview(){
+  const out=document.getElementById('materialOutput');
+
+  // Map each task ID to the section label it should display under
+  // General Turn subtasks get their own label; everything else uses parent label
+  const GENERAL_TURN_IDS = new Set(['gen_electrical','gen_plumbing','gen_countertops','gen_blinds','gen_appliances','gen_blackbars','gen_vanity','gen_other']);
+  const SUBTASK_LABELS = {
+    gen_electrical:'Electrical', gen_plumbing:'Plumbing', gen_countertops:'Countertops',
+    gen_blinds:'Blinds', gen_appliances:'Appliances', gen_blackbars:'Black Bars',
+    gen_vanity:'Vanity Mirror / Medicine Cabinet', gen_other:'Other'
+  };
+
+  function sectionLabel(id, parentLabel){
+    return GENERAL_TURN_IDS.has(id) ? (SUBTASK_LABELS[id]||parentLabel) : parentLabel;
+  }
+
+  // Collect fixed items grouped by section label
+  const cats={}; // sectionLabel -> [{...item, fixed:true}]
+  const catOrder=[]; // preserve insertion order
+  const allIds=[];
+  TASKS.forEach(t=>{ if(t.subtasks&&t.subtasks.length) t.subtasks.forEach(s=>allIds.push({id:s.id,label:t.label})); else allIds.push({id:t.id,label:t.label}); });
+
+  allIds.forEach(({id,label})=>{
+    if(!checkedTasks[id]) return;
+    const key=getFixedKey(id); if(key===null) return;
+    const items=FIXED_MATERIALS[key]; if(!items||items.length===0) return;
+    const sl=sectionLabel(id,label);
+    if(!cats[sl]){ cats[sl]=[]; catOrder.push(sl); }
+    items.forEach(item=>{ if(!cats[sl].find(i=>i.name===item.name)) cats[sl].push({...item,fixed:true}); });
+  });
+
+  // Collect variable items — use their cat field directly as section label
+  // For General Turn variable items, cat is already set to the subcategory name
+  const varItems=getVariableItems(checkedTasks,selectedProperty);
+  varItems.forEach(item=>{
+    const sl=item.cat;
+    if(!cats[sl]){ cats[sl]=[]; catOrder.push(sl); }
+    if(!cats[sl].find(i=>i.key===item.key)) cats[sl].push({...item,fixed:false});
+  });
+
+  const hasAnything=Object.values(cats).some(arr=>arr.length>0);
+  if(!hasAnything){ out.innerHTML='<div class="no-tasks-msg">Check tasks above to preview materials.</div>'; return; }
+
+  out.innerHTML='';
+  catOrder.forEach(catLabel=>{
+    const items=cats[catLabel]; if(!items||items.length===0) return;
+    const d=document.createElement('div'); d.className='material-category';
+    const t=document.createElement('div'); t.className='material-category-title'; t.textContent=catLabel; d.appendChild(t);
+
+    items.forEach(item=>{
+      const r=document.createElement('div'); r.className='material-item'; r.style.alignItems='center';
+      const n=document.createElement('div'); n.className='material-item-name'; n.textContent=item.name||item.label||'';
+
+      if(item.fixed){
+        // Fixed item — just show qty badge
+        const q=document.createElement('div'); q.className='material-item-qty'; q.textContent=item.qty;
+        r.appendChild(n); r.appendChild(q);
+      } else {
+        // Variable item — show qty input inline
+        const inputWrap=document.createElement('div'); inputWrap.style.cssText='display:flex;align-items:center;gap:6px;flex-shrink:0;';
+        const inp=document.createElement('input');
+        inp.type='number'; inp.min='0'; inp.value=varQtys[item.key]||0;
+        inp.style.cssText='width:58px;border:1.5px solid var(--mid-gray);border-radius:6px;padding:4px 7px;font-size:13px;text-align:center;font-family:inherit;';
+        inp.oninput=(e)=>{
+          const v=parseInt(e.target.value)||0;
+          varQtys[item.key]=v;
+          // Auto-set dishwasher supply line
+          if(item.key==='dishwasher') varQtys['dw_supply']=v;
+          // Re-render to show/hide supply line row
+          if(item.key==='dishwasher') renderMaterialPreview();
+        };
+        inp.onfocus=()=>inp.select();
+        const unit=document.createElement('span'); unit.style.cssText='font-size:12px;color:var(--dark-gray);';
+        unit.textContent=item.unit||'unit(s)';
+        inputWrap.appendChild(inp); inputWrap.appendChild(unit);
+        r.appendChild(n); r.appendChild(inputWrap);
+
+        // Skip dishwasher supply line row — it auto-follows dishwasher
+        if(item.key==='dw_supply') return;
+      }
+      d.appendChild(r);
+    });
+
+    // Show auto-calculated dishwasher supply line if dishwasher qty > 0
+    if(catLabel==='Appliances'&&(varQtys['dishwasher']||0)>0){
+      const q=varQtys['dishwasher'];
+      const sr=document.createElement('div'); sr.className='material-item';
+      sr.style.cssText='background:var(--green-light);border-radius:5px;padding:5px 8px;margin-top:2px;';
+      const sn=document.createElement('div'); sn.className='material-item-name';
+      sn.style.cssText='font-size:12px;color:var(--green);';
+      sn.textContent='↳ Dishwasher Supply Line (6ft) — auto-added';
+      const sq=document.createElement('div'); sq.className='material-item-qty';
+      sq.style.cssText='background:var(--green-light);color:var(--green);font-size:12px;';
+      sq.textContent=q+' unit'+(q>1?'s':'');
+      sr.appendChild(sn); sr.appendChild(sq); d.appendChild(sr);
+    }
+
+    out.appendChild(d);
+  });
+}
+
+// ─── TOAST ────────────────────────────────────────────
+let toastTimer=null;
+function showToast(msg, type='success', duration=3000){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='toast '+(type||'success');
+  void t.offsetWidth; // force reflow
+  t.classList.add('show');
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{ t.classList.remove('show'); },duration);
+}
+
+// ─── CONFIRM MODAL ────────────────────────────────────
+function showConfirm(title, body, buttons){
+  // buttons = [{label, style, onClick}]
+  document.getElementById('confirmTitle').textContent=title;
+  document.getElementById('confirmBody').innerHTML=body;
+  const footer=document.getElementById('confirmFooter'); footer.innerHTML='';
+  buttons.forEach(btn=>{
+    const b=document.createElement('button');
+    b.className='btn btn-sm '+(btn.style||'btn-primary');
+    b.textContent=btn.label;
+    b.onclick=()=>{ document.getElementById('confirmModal').classList.add('hidden'); btn.onClick(); };
+    footer.appendChild(b);
+  });
+  document.getElementById('confirmModal').classList.remove('hidden');
+}
+function closeConfirm(){ document.getElementById('confirmModal').classList.add('hidden'); }
+
+// ─── SAVE FLOW ────────────────────────────────────────
+function initSave(){
+  const unit=document.getElementById('unitNumber').value.trim().toUpperCase();
+  const due=document.getElementById('dueDate').value;
+  const sub=document.getElementById('subName').value.trim();
+  if(!unit){showToast('Please enter a unit number.','error');return;}
+  if(!due){showToast('Please enter a due date.','error');return;}
+  const checked=Object.keys(checkedTasks).filter(k=>checkedTasks[k]);
+  if(checked.length===0){showToast('Please check at least one task.','error');return;}
+
+  // Check for existing active turn with same unit number
+  const existing=getTurns().find(t=>t.unit.toUpperCase()===unit&&t.status!=='complete');
+  if(existing){
+    showConfirm(
+      'Unit Already Saved',
+      `<strong>Unit ${unit}</strong> already has an active turn saved.<br><br>Would you like to <strong>overwrite</strong> it with the current walkthrough data, or cancel and keep the existing turn?`,
+      [
+        {label:'Cancel', style:'btn-ghost', onClick:()=>{}},
+        {label:'Overwrite', style:'btn-danger', onClick:()=>doSave(unit,due,sub,checked,existing.id)},
+      ]
+    );
+    return;
+  }
+  doSave(unit,due,sub,checked,null);
+}
+
+function doSave(unit,due,sub,checked,overwriteId){
+  const finalVarQtys={...varQtys};
+  if((finalVarQtys['dishwasher']||0)>0) finalVarQtys['dw_supply']=finalVarQtys['dishwasher'];
+
+  const total=Object.entries(billingPrices).reduce((sum,[key,val])=>{
+    if(GENERAL_TURN_SUBTASK_IDS.has(key)) return sum;
+    return sum+(val||0);
+  },0);
+
+  const turn={
+    id:overwriteId||Date.now(), unit, property:selectedProperty, due, sub,
+    tasks:checked, notes:{...taskNotes}, billing:{...billingPrices},
+    generalTurnType, varQtys:finalVarQtys, total, status:'active',
+    stage:'inprogress', subProgress:{},
+    created:new Date().toISOString(), matStatus:{}
+  };
+
+  let turns=getTurns();
+  if(overwriteId){
+    turns=turns.map(t=>t.id===overwriteId?turn:t);
+    showToast('Unit '+unit+' overwritten ✓','warning');
+  } else {
+    turns.push(turn);
+    showToast('Unit '+unit+' saved ✓','success');
+  }
+  saveTurns(turns);
+}
+
+// ─── RESET ────────────────────────────────────────────
+function resetWalkthrough(){
+  showConfirm(
+    'Reset Walkthrough',
+    'All current walkthrough data will be cleared. Are you sure?',
+    [
+      {label:'Cancel', style:'btn-ghost', onClick:()=>{}},
+      {label:'Reset', style:'btn-danger', onClick:()=>{
+        checkedTasks={}; taskNotes={}; billingPrices={}; openSections={}; varQtys={}; generalTurnType='full';
+        document.getElementById('unitNumber').value='';
+        document.getElementById('dueDate').value='';
+        document.getElementById('subName').value='';
+        renderChecklist();
+        showToast('Walkthrough reset','warning');
+      }}
+    ]
+  );
+}
+
+// ─── STORAGE ──────────────────────────────────────────
+function getTurns(){ try{return JSON.parse(localStorage.getItem('fs_turns')||'[]');}catch{return[];} }
+function saveTurns(t){ localStorage.setItem('fs_turns',JSON.stringify(t)); }
+
+// ─── BUILD MATERIAL LIST FOR A TURN ──────────────────
+// Returns array of {key, name, qty (string), qtyNum (number or null), cat}
+function buildTurnMaterials(turn){
+  const items=[];
+  const prop=turn.property||'Orchards';
+  const allIds=[];
+  TASKS.forEach(t=>{ if(t.subtasks&&t.subtasks.length) t.subtasks.forEach(s=>allIds.push(s.id)); else allIds.push(t.id); });
+  allIds.forEach(id=>{
+    if(!turn.tasks.includes(id)) return;
+    const key=[id+'_'+prop,id].find(k=>FIXED_MATERIALS[k]!==undefined);
+    if(key===undefined||key===null) return;
+    const mats=FIXED_MATERIALS[key]; if(!mats) return;
+    mats.forEach(m=>{
+      if(m.qty==='Variable'||m.qty==='See notes') return; // skip truly variable ones
+      items.push({key:id+'__'+m.name.replace(/\s+/g,'_'), name:m.name, qty:m.qty, qtyNum:null, cat:m.cat||'General'});
+    });
+  });
+  // Variable items with quantities
+  const vq=turn.varQtys||{};
+  const varDefs=getVariableItems(turn.tasks.reduce((o,id)=>{o[id]=true;return o;},{}),prop);
+  varDefs.forEach(v=>{
+    const q=vq[v.key]||0; if(q===0) return;
+    const unitLabel=v.unit||'unit(s)';
+    items.push({key:'var__'+v.key, name:v.label, qty:q+' '+unitLabel, qtyNum:q, cat:v.cat});
+  });
+  // Dishwasher supply line (auto-added)
+  if((vq['dishwasher']||0)>0){
+    const q=vq['dishwasher'];
+    items.push({key:'var__dw_supply', name:'Dishwasher Supply Line (6ft)', qty:q+' unit(s)', qtyNum:q, cat:'Appliances'});
+  }
+  return items;
+}
+
+// ─── TRACKER ──────────────────────────────────────────
+let openAccordions = new Set();
+
+function renderTracker(){
+  const list=document.getElementById('trackerList'); list.innerHTML='';
+  const turns=getTurns();
+  if(turns.length===0){list.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><p>No turns saved yet.</p></div>';return;}
+  const sorted=[...turns].sort((a,b)=>new Date(a.due)-new Date(b.due));
+  sorted.forEach(turn=>{
+    const today=new Date(); today.setHours(0,0,0,0);
+    const dd=new Date(turn.due+'T00:00:00');
+    const isOverdue=dd<today&&turn.status!=='complete';
+    const status=turn.status==='complete'?'complete':isOverdue?'overdue':'active';
+    const dueFmt=dd.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const stageLabelMap={inprogress:'In Progress',punchout:'Punch-Out',subfix:'Sub Fixing',finalwalk:'Final Walk',complete:'Complete'};
+    const stageLabel=stageLabelMap[turn.stage||'inprogress']||'';
+    const subProgress=turn.subProgress||{};
+    const doneCount=turn.tasks.filter(id=>subProgress[id]).length;
+    const totalCount=turn.tasks.length;
+    const pct=totalCount>0?Math.round(doneCount/totalCount*100):0;
+    const hasNotes=turn.subNotes&&turn.subNotes.length>0;
+
+    const card=document.createElement('div'); card.className='turn-card status-'+status;
+    card.dataset.id=turn.id;
+
+    // ── TOP (clickable to toggle accordion) ──
+    const top=document.createElement('div'); top.className='turn-card-top';
+    top.style.cursor='pointer';
+
+    // Flag badge if sub has notes
+    const flagHtml=hasNotes?'<span class="flag-badge">🚩 '+turn.subNotes.length+' Note'+(turn.subNotes.length>1?'s':'')+'</span>':'';
+
+    top.innerHTML=`
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+          <div class="turn-unit">Unit ${turn.unit}</div>
+          ${flagHtml}
+        </div>
+        <div class="turn-property">${turn.property}${turn.sub?' · '+turn.sub:''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+        <div class="turn-due${isOverdue&&status!=='complete'?' overdue':''}">Due: ${dueFmt}</div>
+        <span class="status-badge badge-${status}">${status}</span>
+        <span class="stage-badge stage-${turn.stage||'inprogress'}">${stageLabel}</span>
+        <strong style="font-size:14px;color:var(--navy)">$${(turn.total||0).toFixed(2)}</strong>
+        <span style="font-size:11px;color:var(--mid-gray);">${pct}% done</span>
+      </div>`;
+    top.onclick=()=>toggleAccordion(turn.id);
+
+    // ── TASK CHIPS (green if done) ──
+    const tw=document.createElement('div'); tw.className='turn-card-tasks';
+    turn.tasks.forEach(id=>{
+      const isDone=!!subProgress[id];
+      const chip=document.createElement('span');
+      chip.className='task-chip'+(isDone?' chip-done':'');
+      chip.textContent=TASK_LABELS[id]||id;
+      tw.appendChild(chip);
+    });
+
+    // ── ACTIONS ──
+    const actions=document.createElement('div'); actions.className='turn-card-actions';
+    const editBtn=document.createElement('button'); editBtn.className='btn btn-sm btn-ghost'; editBtn.textContent='✏️ Edit';
+    editBtn.onclick=(e)=>{e.stopPropagation();openEditModal(turn.id);}; actions.appendChild(editBtn);
+    if(turn.status!=='complete'){
+      const markBtn=document.createElement('button'); markBtn.className='btn btn-sm btn-gold'; markBtn.textContent='✓ Mark Complete';
+      markBtn.onclick=(e)=>{e.stopPropagation();const ts=getTurns();const t=ts.find(t=>t.id===turn.id);if(t){t.status='complete';saveTurns(ts);renderTracker();}};
+      actions.appendChild(markBtn);
+    }
+    const delBtn=document.createElement('button'); delBtn.className='btn btn-sm btn-danger'; delBtn.textContent='🗑 Delete';
+    const turnId=turn.id; const turnUnit=turn.unit;
+    delBtn.onclick=(e)=>{
+      e.stopPropagation();
+      showConfirm('Delete Turn',`Are you sure you want to delete the turn for <strong>Unit ${turnUnit}</strong>? This cannot be undone.`,[
+        {label:'Cancel',style:'btn-ghost',onClick:()=>{}},
+        {label:'Delete',style:'btn-danger',onClick:()=>{
+          saveTurns(getTurns().filter(t=>t.id!==turnId));
+          openAccordions.delete(turnId);
+          showToast('Unit '+turnUnit+' deleted','warning');
+          renderTracker();
+        }}
+      ]);
+    };
+    actions.appendChild(delBtn);
+
+    // ── ACCORDION ──
+    const accordion=document.createElement('div');
+    accordion.className='turn-card-accordion'+(openAccordions.has(turn.id)?' open':'');
+    accordion.id='accordion_'+turn.id;
+
+    const abody=document.createElement('div'); abody.className='accordion-body';
+
+    // Progress bar
+    const progWrap=document.createElement('div'); progWrap.className='progress-bar-wrap';
+    const progBar=document.createElement('div'); progBar.className='progress-bar'; progBar.style.width=pct+'%';
+    progWrap.appendChild(progBar);
+    const progLbl=document.createElement('div'); progLbl.className='progress-label';
+    progLbl.textContent=doneCount+' of '+totalCount+' tasks completed by subcontractor';
+    abody.appendChild(progWrap); abody.appendChild(progLbl);
+
+    // Full task list with check states
+    const taskTitle=document.createElement('div'); taskTitle.className='accordion-section-title'; taskTitle.textContent='Task List';
+    abody.appendChild(taskTitle);
+    turn.tasks.forEach(id=>{
+      const isDone=!!subProgress[id];
+      const row=document.createElement('div'); row.className='acc-task-row';
+      const chk=document.createElement('div'); chk.className='custom-check'+(isDone?' checked':'');
+      const lbl=document.createElement('div'); lbl.className='acc-task-label'+(isDone?' done':'');
+      lbl.textContent=TASK_LABELS[id]||id;
+      if(turn.notes&&turn.notes[id]){
+        const n=document.createElement('div'); n.style.cssText='font-size:11px;color:var(--dark-gray);margin-top:1px;';
+        n.textContent='Note: '+turn.notes[id]; lbl.appendChild(n);
+      }
+      row.appendChild(chk); row.appendChild(lbl); abody.appendChild(row);
+    });
+
+    // Sub notes section
+    const notesTitle=document.createElement('div'); notesTitle.className='accordion-section-title';
+    notesTitle.style.marginTop='16px';
+    notesTitle.innerHTML='Sub Notes '+(hasNotes?'<span class="flag-badge">🚩 '+turn.subNotes.length+'</span>':'');
+    abody.appendChild(notesTitle);
+
+    if(hasNotes){
+      turn.subNotes.forEach(note=>{
+        const nr=document.createElement('div'); nr.className='acc-note-row';
+        const nt=document.createElement('div'); nt.textContent=note.text;
+        const ts=document.createElement('div'); ts.className='acc-note-time';
+        ts.textContent=new Date(note.at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+        nr.appendChild(nt); nr.appendChild(ts); abody.appendChild(nr);
+      });
+    } else {
+      const empty=document.createElement('div'); empty.style.cssText='font-size:13px;color:var(--mid-gray);padding:6px 0;';
+      empty.textContent='No notes from subcontractor yet.'; abody.appendChild(empty);
+    }
+
+    accordion.appendChild(abody);
+    card.appendChild(top); card.appendChild(tw); card.appendChild(actions); card.appendChild(accordion);
+    list.appendChild(card);
+  });
+}
+
+function toggleAccordion(turnId){
+  if(openAccordions.has(turnId)) openAccordions.delete(turnId);
+  else openAccordions.add(turnId);
+  const el=document.getElementById('accordion_'+turnId);
+  if(el) el.classList.toggle('open', openAccordions.has(turnId));
+}
+
+// ─── EDIT MODAL ───────────────────────────────────────
+let editingTurnId=null;
+function openEditModal(id){
+  editingTurnId=id;
+  const turns=getTurns(); const turn=turns.find(t=>t.id===id); if(!turn) return;
+  const body=document.getElementById('editModalBody');
+  body.innerHTML=`
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>Subcontractor</label>
+      <input type="text" id="editSub" value="${turn.sub||''}" placeholder="Name or business">
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>Due Date</label>
+      <input type="date" id="editDue" value="${turn.due||''}">
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select id="editStatus">
+        <option value="active"${turn.status==='active'?' selected':''}>Active</option>
+        <option value="complete"${turn.status==='complete'?' selected':''}>Complete</option>
+      </select>
+    </div>`;
+  document.getElementById('editModal').classList.remove('hidden');
+}
+function closeEditModal(){ document.getElementById('editModal').classList.add('hidden'); editingTurnId=null; }
+function saveEdit(){
+  if(!editingTurnId) return;
+  const turns=getTurns(); const turn=turns.find(t=>t.id===editingTurnId); if(!turn) return;
+  turn.sub=document.getElementById('editSub').value.trim();
+  turn.due=document.getElementById('editDue').value;
+  turn.status=document.getElementById('editStatus').value;
+  saveTurns(turns); closeEditModal(); renderTracker();
+  showToast('Unit '+turn.unit+' updated ✓','success');
+  if(document.getElementById('screen-materials').classList.contains('active')) renderMaterials();
+}
+
+// ─── MATERIALS TAB ────────────────────────────────────
+function renderMaterials(){
+  renderMasterList();
+  renderPerTurnList();
+}
+
+function getMatKey(turnId, itemKey){ return turnId+'__'+itemKey; }
+
+function getMatStatus(turn, itemKey){
+  return (turn.matStatus&&turn.matStatus[itemKey])||{ordered:false,delivered:false};
+}
+
+function setMatStatus(turnId, itemKey, field, value){
+  const turns=getTurns();
+  const turn=turns.find(t=>t.id===turnId); if(!turn) return;
+  if(!turn.matStatus) turn.matStatus={};
+  if(!turn.matStatus[itemKey]) turn.matStatus[itemKey]={ordered:false,delivered:false};
+  turn.matStatus[itemKey][field]=value;
+  // If delivered is being checked, also mark ordered
+  if(field==='delivered'&&value) turn.matStatus[itemKey]['ordered']=true;
+  saveTurns(turns);
+  renderMaterials();
+}
+
+function renderMatRow(item, turn, container){
+  const st=getMatStatus(turn, item.key);
+  if(st.delivered) return; // hide delivered items
+  const row=document.createElement('div'); row.className='mat-row';
+  const name=document.createElement('div'); name.className='mat-row-name'; name.textContent=item.name;
+  const qty=document.createElement('div'); qty.className='mat-row-qty'; qty.textContent=item.qty;
+  const checks=document.createElement('div'); checks.className='mat-check-group';
+
+  const ordLbl=document.createElement('label'); ordLbl.className='mat-check-label';
+  const ordInp=document.createElement('input'); ordInp.type='checkbox'; ordInp.checked=st.ordered;
+  ordInp.onchange=(e)=>{ setMatStatus(turn.id,item.key,'ordered',e.target.checked); };
+  ordLbl.appendChild(ordInp); ordLbl.appendChild(document.createTextNode(' Ordered'));
+
+  const delLbl=document.createElement('label'); delLbl.className='mat-check-label delivered-lbl';
+  const delInp=document.createElement('input'); delInp.type='checkbox'; delInp.checked=st.delivered;
+  delInp.onchange=(e)=>{ setMatStatus(turn.id,item.key,'delivered',e.target.checked); };
+  delLbl.appendChild(delInp); delLbl.appendChild(document.createTextNode(' Delivered'));
+
+  checks.appendChild(ordLbl); checks.appendChild(delLbl);
+  row.appendChild(name); row.appendChild(qty); row.appendChild(checks);
+  container.appendChild(row);
+}
+
+function renderPerTurnList(){
+  const wrap=document.getElementById('perTurnMatList'); wrap.innerHTML='';
+  const turns=getTurns().filter(t=>t.status!=='complete');
+  if(turns.length===0){wrap.innerHTML='<div class="no-tasks-msg">No active turns found.</div>';return;}
+  turns.forEach(turn=>{
+    const items=buildTurnMaterials(turn);
+    if(items.length===0) return;
+    const visible=items.filter(i=>!getMatStatus(turn,i.key).delivered);
+    const card=document.createElement('div'); card.className='mat-turn-card';
+    const header=document.createElement('div'); header.className='mat-turn-header';
+    header.onclick=()=>{ body.classList.toggle('open'); chev.classList.toggle('open'); };
+    const titleWrap=document.createElement('div');
+    const title=document.createElement('div'); title.className='mat-turn-title'; title.textContent='Unit '+turn.unit+' – '+turn.property;
+    const sub=document.createElement('div'); sub.className='mat-turn-sub';
+    const dd=new Date(turn.due+'T00:00:00');
+    sub.textContent=(turn.sub||'No sub assigned')+' · Due '+dd.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' · '+visible.length+' item'+(visible.length!==1?'s':'')+' remaining';
+    titleWrap.appendChild(title); titleWrap.appendChild(sub);
+    const chev=document.createElement('span'); chev.className='chevron'; chev.textContent='▼';
+    header.appendChild(titleWrap); header.appendChild(chev);
+    const body=document.createElement('div'); body.className='mat-turn-body';
+    // Group by category
+    const cats={};
+    items.forEach(i=>{ if(!cats[i.cat]) cats[i.cat]=[]; cats[i.cat].push(i); });
+    Object.entries(cats).forEach(([cat,citems])=>{
+      const hasVisible=citems.some(i=>!getMatStatus(turn,i.key).delivered);
+      if(!hasVisible) return;
+      const ct=document.createElement('div'); ct.className='master-section-title'; ct.textContent=cat; body.appendChild(ct);
+      citems.forEach(item=>renderMatRow(item,turn,body));
+    });
+    card.appendChild(header); card.appendChild(body);
+    wrap.appendChild(card);
+  });
+  if(wrap.innerHTML==='') wrap.innerHTML='<div class="no-tasks-msg">All materials delivered for active turns.</div>';
+}
+
+function renderMasterList(){
+  const wrap=document.getElementById('masterMatBody'); wrap.innerHTML='';
+  const turns=getTurns().filter(t=>t.status!=='complete');
+  if(turns.length===0){wrap.innerHTML='<div class="no-tasks-msg">No active turns.</div>';return;}
+
+  // Aggregate by item name + cat, sum numeric quantities
+  const master={}; // key: itemName+cat -> {name, cat, qtyNum, turns:[]}
+  turns.forEach(turn=>{
+    const items=buildTurnMaterials(turn);
+    items.forEach(item=>{
+      const st=getMatStatus(turn,item.key);
+      if(st.delivered) return; // delivered items disappear from master
+      const mk=item.cat+'__'+item.name;
+      if(!master[mk]) master[mk]={name:item.name, cat:item.cat, qtyNum:0, isNumeric:false, turns:[]};
+      master[mk].turns.push({turnId:turn.id, unit:turn.unit, itemKey:item.key, ordered:st.ordered, delivered:st.delivered});
+      if(item.qtyNum!==null){ master[mk].qtyNum+=item.qtyNum; master[mk].isNumeric=true; }
+      else {
+        // Try to parse numeric qty from string like "27 Boxes"
+        const m=item.qty.match(/^(\d+)/);
+        if(m){ master[mk].qtyNum+=parseInt(m[1]); master[mk].isNumeric=true; }
+        else master[mk].qtyStr=item.qty;
+      }
+    });
+  });
+
+  if(Object.keys(master).length===0){wrap.innerHTML='<div class="no-tasks-msg">All materials delivered.</div>';return;}
+
+  // Group by cat
+  const byCat={};
+  Object.values(master).forEach(m=>{
+    if(!byCat[m.cat]) byCat[m.cat]=[];
+    byCat[m.cat].push(m);
+  });
+
+  Object.entries(byCat).forEach(([cat,items])=>{
+    const ct=document.createElement('div'); ct.className='master-section-title'; ct.textContent=cat; wrap.appendChild(ct);
+    items.forEach(item=>{
+      const allOrdered=item.turns.every(t=>t.ordered||t.delivered);
+      const row=document.createElement('div'); row.className='mat-row';
+      const name=document.createElement('div'); name.className='mat-row-name'; name.textContent=item.name;
+      // Show unit breakdown if multiple turns
+      if(item.turns.length>1){
+        const sub=document.createElement('div');
+        sub.style.cssText='font-size:11px;color:var(--mid-gray);margin-top:2px;';
+        sub.textContent='Units: '+item.turns.map(t=>t.unit).join(', ');
+        name.appendChild(sub);
+      }
+      const qty=document.createElement('div'); qty.className='mat-row-qty';
+      qty.textContent=item.isNumeric?item.qtyNum+(item.qtyStr?' ('+item.qtyStr+')':''):(item.qtyStr||'—');
+      // Master ordered status = all turns ordered
+      const ordLbl=document.createElement('label'); ordLbl.className='mat-check-label';
+      const ordInp=document.createElement('input'); ordInp.type='checkbox'; ordInp.checked=allOrdered;
+      ordInp.disabled=true; // master ordered is read-only (reflects per-unit status)
+      ordLbl.appendChild(ordInp); ordLbl.appendChild(document.createTextNode(' Ordered'));
+      const checks=document.createElement('div'); checks.className='mat-check-group';
+      checks.appendChild(ordLbl);
+      row.appendChild(name); row.appendChild(qty); row.appendChild(checks);
+      wrap.appendChild(row);
+    });
+  });
+}
+
+// ─── SUB VIEW ─────────────────────────────────────────
+function loadSubView(){
+  const code=document.getElementById('subJobCode').value.trim().toUpperCase();
+  const view=document.getElementById('subTaskView');
+  if(!code){view.innerHTML='';return;}
+  const turn=getTurns().find(t=>t.unit.toUpperCase()===code);
+  if(!turn){
+    view.innerHTML='<div class="card"><div class="card-body"><p style="color:var(--dark-gray);font-size:14px;">No turn found for unit <strong>'+code+'</strong>. Check your job code or contact FullScope Services.</p></div></div>';
+    return;
+  }
+  renderSubView(turn, view);
+}
+
+function renderSubView(turn, container){
+  const dd=new Date(turn.due+'T00:00:00');
+  const dueFmt=dd.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const stage=turn.stage||'inprogress';
+  const stageLabelMap={inprogress:'In Progress',punchout:'Punch-Out Submitted',subfix:'Punch-Out Fixes',finalwalk:'Final Walkthrough',complete:'Complete'};
+  const stageLabel=stageLabelMap[stage]||stage;
+
+  // Determine which task list and checklist to show
+  let html=`<div class="card">
+    <div class="card-header">🏠 Unit ${turn.unit} – ${turn.property}
+      <span class="stage-badge stage-${stage}">${stageLabel}</span>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px;">
+        <div><div style="font-size:11px;color:var(--dark-gray);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">Due Date</div>
+        <div style="font-size:15px;font-weight:700;color:var(--navy)">${dueFmt}</div></div>
+        ${turn.sub?`<div><div style="font-size:11px;color:var(--dark-gray);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">Assigned To</div><div style="font-size:15px;font-weight:700;color:var(--navy)">${turn.sub}</div></div>`:''}
+      </div>`;
+
+  if(stage==='inprogress'){
+    // Show task checklist with checkboxes
+    const subProgress=turn.subProgress||{};
+    const total=turn.tasks.length;
+    const done=turn.tasks.filter(id=>subProgress[id]).length;
+    const pct=total>0?Math.round(done/total*100):0;
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--dark-gray);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Your Tasks</div>
+      <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
+      <div class="progress-label">${done} of ${total} tasks completed</div>
+      <div id="subTaskRows_${turn.id}">`;
+    turn.tasks.forEach(id=>{
+      const label=TASK_LABELS[id]||id;
+      const note=turn.notes[id]?`<div class="sub-task-note">Note: ${turn.notes[id]}</div>`:'';
+      const isDone=!!subProgress[id];
+      html+=`<div class="sub-task-row${isDone?' done':''}" onclick="toggleSubTask('${turn.id}','${id}')">
+        <div class="custom-check${isDone?' checked':''}"></div>
+        <div><div class="sub-task-label">${label}</div>${note}</div>
+      </div>`;
+    });
+    const allDone=done===total&&total>0;
+    html+=`</div>
+
+      <div style="margin-top:18px;border-top:1px solid var(--light-gray);padding-top:14px;">
+        <div style="font-size:11px;font-weight:700;color:var(--dark-gray);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">🚩 Notes for FullScope</div>
+        <div id="subNotesList_${turn.id}" style="margin-bottom:10px;">`;
+
+    const notes=turn.subNotes||[];
+    if(notes.length===0){
+      html+=`<div style="font-size:13px;color:var(--mid-gray);padding:4px 0;">No notes added yet.</div>`;
+    } else {
+      notes.forEach(note=>{
+        const ts=new Date(note.at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+        html+=`<div class="acc-note-row"><div>${note.text}</div><div class="acc-note-time">${ts}</div></div>`;
+      });
+    }
+    html+=`</div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="subNoteInput_${turn.id}" placeholder="Describe an issue you found..." style="flex:1;border:1.5px solid var(--mid-gray);border-radius:7px;padding:8px 11px;font-size:13px;font-family:inherit;" onkeydown="if(event.key==='Enter')addSubNote('${turn.id}')">
+          <button class="btn btn-primary btn-sm" onclick="addSubNote('${turn.id}')">Add</button>
+        </div>
+      </div>
+
+      <button class="ready-btn ${allDone?'unlocked':'locked'}" ${allDone?`onclick="submitPunchOut('${turn.id}')"`:'disabled'}>
+        ${allDone?'✓ Ready for Punch-Out':'Complete all tasks to unlock'}
+      </button>`;
+
+  } else if(stage==='punchout'){
+    html+=`<div style="padding:14px;background:#fff3e0;border-radius:8px;font-size:13px;color:#7a4010;">
+      <strong>⏳ Punch-Out In Progress</strong><br>FullScope Services is walking the unit. Your punch-out list will appear here once it's ready.
+    </div>`;
+
+  } else if(stage==='subfix'){
+    // Show punch-out items as checkable list
+    const poItems=turn.punchoutItems||[];
+    const poProgress=turn.poProgress||{};
+    const total=poItems.length;
+    const done=poItems.filter((_,i)=>poProgress[i]).length;
+    const pct=total>0?Math.round(done/total*100):0;
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--dark-gray);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Punch-Out Items to Fix</div>
+      <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
+      <div class="progress-label">${done} of ${total} items fixed</div>`;
+    poItems.forEach((item,i)=>{
+      const isDone=!!poProgress[i];
+      html+=`<div class="sub-task-row${isDone?' done':''}" onclick="togglePoTask('${turn.id}',${i})">
+        <div class="custom-check${isDone?' checked':''}"></div>
+        <div class="sub-task-label">${item}</div>
+      </div>`;
+    });
+    const allDone=done===total&&total>0;
+    html+=`<button class="ready-btn ${allDone?'unlocked':'locked'}" ${allDone?`onclick="submitFinalWalk('${turn.id}')"`:'disabled'}>
+      ${allDone?'✓ Ready for Final Walkthrough':'Fix all items to unlock'}
+    </button>`;
+
+  } else if(stage==='finalwalk'){
+    html+=`<div style="padding:14px;background:var(--green-light);border-radius:8px;font-size:13px;color:var(--green);">
+      <strong>✅ Final Walkthrough In Progress</strong><br>FullScope Services is conducting the final walkthrough. You'll be notified when the unit is approved.
+    </div>`;
+
+  } else if(stage==='complete'){
+    html+=`<div style="padding:14px;background:var(--green-light);border-radius:8px;font-size:13px;color:var(--green);">
+      <strong>🎉 Unit Complete!</strong><br>This unit has been approved and is ready to be billed. Great work!
+    </div>`;
+  }
+
+  html+=`<div style="margin-top:14px;padding:11px;background:var(--off-white);border-radius:8px;font-size:13px;color:var(--dark-gray);">Any work beyond the original scope must be approved by FullScope Services before proceeding.</div>
+    </div></div>`;
+
+  container.innerHTML=html;
+}
+
+function toggleSubTask(turnId, taskId){
+  const turns=getTurns();
+  const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
+  if(!turn) return;
+  if(!turn.subProgress) turn.subProgress={};
+  turn.subProgress[taskId]=!turn.subProgress[taskId];
+  saveTurns(turns);
+  // Re-render sub view
+  const view=document.getElementById('subTaskView');
+  renderSubView(turn, view);
+}
+
+function togglePoTask(turnId, idx){
+  const turns=getTurns();
+  const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
+  if(!turn) return;
+  if(!turn.poProgress) turn.poProgress={};
+  turn.poProgress[idx]=!turn.poProgress[idx];
+  saveTurns(turns);
+  const view=document.getElementById('subTaskView');
+  renderSubView(turn, view);
+}
+
+function submitPunchOut(turnId){
+  const turns=getTurns();
+  const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
+  if(!turn) return;
+  turn.stage='punchout';
+  turn.punchoutSubmittedAt=new Date().toISOString();
+  saveTurns(turns);
+  showToast('Unit '+turn.unit+' submitted for Punch-Out ✓','success');
+  const view=document.getElementById('subTaskView');
+  renderSubView(turn, view);
+}
+
+function submitFinalWalk(turnId){
+  const turns=getTurns();
+  const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
+  if(!turn) return;
+  turn.stage='finalwalk';
+  turn.finalWalkSubmittedAt=new Date().toISOString();
+  saveTurns(turns);
+  showToast('Unit '+turn.unit+' submitted for Final Walkthrough ✓','success');
+  const view=document.getElementById('subTaskView');
+  renderSubView(turn, view);
+}
+
+// ─── PUNCH-OUT TAB ────────────────────────────────────
+function renderPunchout(){
+  const wrap=document.getElementById('punchoutList'); wrap.innerHTML='';
+  const turns=getTurns().filter(t=>t.stage==='punchout');
+  if(turns.length===0){
+    wrap.innerHTML='<div class="empty-state"><div class="empty-icon">🔎</div><p>No units awaiting punch-out.</p></div>';
+    return;
+  }
+  turns.forEach(turn=>{
+    const submittedAt=turn.punchoutSubmittedAt?new Date(turn.punchoutSubmittedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'Unknown';
+    const dd=new Date(turn.due+'T00:00:00');
+    const dueFmt=dd.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const items=turn.punchoutItems||[];
+
+    const card=document.createElement('div'); card.className='punchout-card';
+    card.innerHTML=`
+      <div class="punchout-card-header">
+        <div class="punchout-card-title">Unit ${turn.unit} – ${turn.property}</div>
+        <div class="punchout-card-meta">${turn.sub||'No sub assigned'} · Due ${dueFmt}</div>
+        <div class="date-added">Submitted for punch-out: ${submittedAt}</div>
+      </div>
+      <div class="punchout-card-body">
+        <div style="font-size:12px;font-weight:700;color:var(--dark-gray);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;">Add Punch-Out Items</div>
+        <div class="punchout-add-row">
+          <input type="text" id="poInput_${turn.id}" placeholder="Describe the issue..." onkeydown="if(event.key==='Enter')addPoItem('${turn.id}')">
+          <button class="btn btn-primary btn-sm" onclick="addPoItem('${turn.id}')">Add</button>
+        </div>
+        <div id="poItems_${turn.id}">`;
+
+    // Render existing items
+    let itemsHtml='';
+    items.forEach((item,i)=>{
+      itemsHtml+=`<div class="punchout-item" id="poItem_${turn.id}_${i}">
+        <div class="custom-check"></div>
+        <div class="punchout-item-label">${item}</div>
+        <button class="punchout-item-del" onclick="removePoItem('${turn.id}',${i})" title="Remove">✕</button>
+      </div>`;
+    });
+
+    card.innerHTML+=itemsHtml+`</div>`;
+
+    if(items.length>0){
+      const sendBtn=document.createElement('button');
+      sendBtn.className='ready-btn unlocked';
+      sendBtn.style.marginTop='14px';
+      sendBtn.textContent='📤 Send Punch-Out List to Subcontractor';
+      sendBtn.onclick=()=>sendPunchoutToSub(turn.id);
+      card.querySelector('.punchout-card-body').appendChild(sendBtn);
+    } else {
+      const hint=document.createElement('p');
+      hint.style.cssText='font-size:13px;color:var(--mid-gray);text-align:center;padding:10px 0;';
+      hint.textContent='Add at least one item to send the punch-out list.';
+      card.querySelector('.punchout-card-body').appendChild(hint);
+    }
+
+    wrap.appendChild(card);
+  });
+}
+
+function addPoItem(turnId){
+  const inp=document.getElementById('poInput_'+turnId);
+  const val=inp.value.trim(); if(!val) return;
+  const turns=getTurns();
+  const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
+  if(!turn) return;
+  if(!turn.punchoutItems) turn.punchoutItems=[];
+  turn.punchoutItems.push(val);
+  saveTurns(turns);
+  inp.value='';
+  renderPunchout();
+}
+
+function removePoItem(turnId, idx){
+  const turns=getTurns();
+  const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
+  if(!turn||!turn.punchoutItems) return;
+  turn.punchoutItems.splice(idx,1);
+  // Also clean up any progress for removed item
+  if(turn.poProgress){
+    const newProg={};
+    Object.entries(turn.poProgress).forEach(([k,v])=>{ if(parseInt(k)<idx) newProg[k]=v; else if(parseInt(k)>idx) newProg[parseInt(k)-1]=v; });
+    turn.poProgress=newProg;
+  }
+  saveTurns(turns);
+  renderPunchout();
+}
+
+function sendPunchoutToSub(turnId){
+  const turns=getTurns();
+  const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
+  if(!turn||!turn.punchoutItems||turn.punchoutItems.length===0){showToast('Add at least one item first','error');return;}
+  showConfirm(
+    'Send Punch-Out List',
+    `Send the punch-out list with <strong>${turn.punchoutItems.length} item${turn.punchoutItems.length!==1?'s':''}</strong> to the subcontractor for Unit <strong>${turn.unit}</strong>?`,
+    [
+      {label:'Cancel',style:'btn-ghost',onClick:()=>{}},
+      {label:'Send',style:'btn-primary',onClick:()=>{
+        turn.stage='subfix';
+        turn.punchoutSentAt=new Date().toISOString();
+        turn.poProgress={};
+        saveTurns(turns);
+        showToast('Punch-out list sent to sub ✓','success');
+        renderPunchout();
+      }}
+    ]
+  );
+}
+
+// ─── FINAL WALKTHROUGH TAB ────────────────────────────
+function renderFinalWalk(){
+  const wrap=document.getElementById('finalwalkList'); wrap.innerHTML='';
+  const turns=getTurns().filter(t=>t.stage==='finalwalk');
+  if(turns.length===0){
+    wrap.innerHTML='<div class="empty-state"><div class="empty-icon">✅</div><p>No units awaiting final walkthrough.</p></div>';
+    return;
+  }
+  turns.forEach(turn=>{
+    const submittedAt=turn.finalWalkSubmittedAt?new Date(turn.finalWalkSubmittedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'Unknown';
+    const dd=new Date(turn.due+'T00:00:00');
+    const dueFmt=dd.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+
+    const card=document.createElement('div'); card.className='punchout-card finalwalk-card';
+    const taskSummary=turn.tasks.slice(0,5).map(id=>TASK_LABELS[id]||id).join(', ')+(turn.tasks.length>5?' +more':'');
+
+    const header=document.createElement('div'); header.className='punchout-card-header';
+    header.innerHTML=`
+      <div class="punchout-card-title">Unit ${turn.unit} – ${turn.property}</div>
+      <div class="punchout-card-meta">${turn.sub||'No sub assigned'} · Due ${dueFmt} · $${(turn.total||0).toFixed(2)}</div>
+      <div class="date-added">Submitted for final walkthrough: ${submittedAt}</div>`;
+
+    const body=document.createElement('div'); body.className='punchout-card-body';
+
+    // Task summary
+    const summary=document.createElement('div');
+    summary.style.cssText='font-size:12px;color:var(--dark-gray);margin-bottom:14px;padding:10px;background:var(--off-white);border-radius:7px;';
+    summary.innerHTML='<strong>Tasks:</strong> '+taskSummary;
+    body.appendChild(summary);
+
+    // Punch-out items resolved
+    if(turn.punchoutItems&&turn.punchoutItems.length>0){
+      const poTitle=document.createElement('div');
+      poTitle.style.cssText='font-size:11px;font-weight:700;color:var(--dark-gray);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;';
+      poTitle.textContent='Punch-Out Items (All Resolved)';
+      body.appendChild(poTitle);
+      turn.punchoutItems.forEach(item=>{
+        const row=document.createElement('div'); row.className='punchout-item done';
+        const chk=document.createElement('div'); chk.className='custom-check checked';
+        const lbl=document.createElement('div'); lbl.className='punchout-item-label'; lbl.textContent=item;
+        row.appendChild(chk); row.appendChild(lbl); body.appendChild(row);
+      });
+    }
+
+    // Mark complete button
+    const completeBtn=document.createElement('button');
+    completeBtn.className='ready-btn unlocked';
+    completeBtn.style.marginTop='16px';
+    completeBtn.textContent='✅ Mark Complete & Ready to Bill';
+    const turnId=turn.id;
+    completeBtn.onclick=()=>{
+      showConfirm(
+        'Mark Unit Complete',
+        `Mark Unit <strong>${turn.unit}</strong> as complete and ready to bill? This will close the turn in the Tracker.`,
+        [
+          {label:'Cancel',style:'btn-ghost',onClick:()=>{}},
+          {label:'Mark Complete',style:'btn-gold',onClick:()=>{
+            const ts=getTurns();
+            const t=ts.find(t=>t.id===turnId);
+            if(t){ t.stage='complete'; t.status='complete'; t.completedAt=new Date().toISOString(); saveTurns(ts); }
+            showToast('Unit '+turn.unit+' marked complete ✓','success');
+            renderFinalWalk();
+            // Refresh tracker if open
+            if(document.getElementById('screen-tracker').classList.contains('active')) renderTracker();
+          }}
+        ]
+      );
+    };
+    body.appendChild(completeBtn);
+    card.appendChild(header); card.appendChild(body);
+    wrap.appendChild(card);
+  });
+}
+
+function addSubNote(turnId){
+  const inp=document.getElementById('subNoteInput_'+turnId);
+  if(!inp) return;
+  const val=inp.value.trim(); if(!val) return;
+  const turns=getTurns();
+  const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
+  if(!turn) return;
+  if(!turn.subNotes) turn.subNotes=[];
+  turn.subNotes.push({text:val, at:new Date().toISOString()});
+  saveTurns(turns);
+  inp.value='';
+  showToast('Note added ✓','success');
+  // Re-render sub view with updated turn
+  const view=document.getElementById('subTaskView');
+  renderSubView(turn, view);
+}
+
+// ─── INIT ─────────────────────────────────────────────
+renderChecklist();
+initPinKeypad();
+</script>
+</body>
+</html>
+DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
