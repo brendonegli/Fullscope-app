@@ -1538,6 +1538,7 @@ function renderSubView(turn, container){
         <div><div style="font-size:11px;color:var(--dark-gray);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">Due Date</div>
         <div style="font-size:15px;font-weight:700;color:var(--navy)">${dueFmt}</div></div>
         ${turn.sub?`<div><div style="font-size:11px;color:var(--dark-gray);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">Assigned To</div><div style="font-size:15px;font-weight:700;color:var(--navy)">${turn.sub}</div></div>`:''}
+        ${(turn.total&&turn.total>0)?`<div><div style="font-size:11px;color:var(--dark-gray);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">Your Total</div><div style="font-size:20px;font-weight:700;color:var(--gold)">$${turn.total.toFixed(2)}</div></div>`:''}
       </div>`;
 
   if(stage==='inprogress'){
