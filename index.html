@@ -513,7 +513,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
   _turnsCol.onSnapshot((snapshot) => {
     window._turns = snapshot.docs.map(d => d.data());
     window._firestoreReady = true;
-    // Re-render whichever screen is active
+    // Only re-render if the user is already unlocked — don't interfere with PIN flow
+    if(!window.isUnlocked) return;
     const active = document.querySelector('.screen.active');
     if(active){
       const id = active.id;
@@ -556,7 +557,7 @@ function enterAsAdmin(){
 }
 
 function goToLanding(){
-  currentRole=null; isUnlocked=false; pinInput=''; updateDots();
+  currentRole=null; isUnlocked=false; window.isUnlocked=false; pinInput=''; updateDots();
   document.getElementById('appHeader').style.display='none';
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display='');
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
@@ -570,6 +571,7 @@ function updateDots(){ for(let i=0;i<8;i++) document.getElementById('d'+i).class
 function pinSubmit(){
   if(pinInput===CORRECT_PIN){
     isUnlocked=true;
+    window.isUnlocked=true;
     currentRole='admin';
     document.getElementById('pinOverlay').classList.add('hidden');
     document.getElementById('pinError').style.display='none';
