@@ -572,7 +572,11 @@ function pinKey(k){ if(pinInput.length>=8)return; pinInput+=k; updateDots(); }
 function pinDel(){ pinInput=pinInput.slice(0,-1); updateDots(); }
 function updateDots(){ for(let i=0;i<8;i++) document.getElementById('d'+i).classList.toggle('filled',i<pinInput.length); }
 
+let _pinSubmitLock = false;
 function pinSubmit(){
+  if(_pinSubmitLock) return;
+  _pinSubmitLock = true;
+  setTimeout(()=>{ _pinSubmitLock = false; }, 600);
   if(pinInput===CORRECT_PIN){
     isUnlocked=true;
     window.isUnlocked=true;
