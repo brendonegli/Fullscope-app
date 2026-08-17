@@ -122,6 +122,24 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
 .turn-card.status-active{border-left-color:var(--gold);}
 .turn-card.status-complete{border-left-color:var(--green);}
 
+/* ── PUNCH-OUT PHOTO UI ── */
+.po-item-wrap{border-bottom:1px solid var(--light-gray);padding:8px 0;}
+.po-item-wrap:last-child{border-bottom:none;}
+.po-item-row{display:flex;align-items:center;gap:8px;font-size:13px;}
+.po-item-label{flex:1;}
+.po-item-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.po-photo-btn{background:none;border:1.5px solid var(--mid-gray);border-radius:6px;padding:3px 7px;font-size:12px;cursor:pointer;color:var(--dark-gray);white-space:nowrap;}
+.po-photo-btn:hover{border-color:var(--navy);color:var(--navy);}
+.po-photos{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;padding-left:4px;}
+.po-photo-thumb{position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;border:1.5px solid var(--light-gray);flex-shrink:0;}
+.po-photo-thumb img{width:100%;height:100%;object-fit:cover;cursor:pointer;}
+.po-photo-del{position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;line-height:18px;text-align:center;cursor:pointer;padding:0;}
+/* Photo lightbox */
+.po-lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:2000;align-items:center;justify-content:center;}
+.po-lightbox.open{display:flex;}
+.po-lightbox img{max-width:95vw;max-height:90vh;border-radius:10px;object-fit:contain;}
+.po-lightbox-close{position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:32px;cursor:pointer;line-height:1;}
+
 /* ── HAMBURGER MENU (mobile only) ── */
 .hamburger-btn{display:none;flex-direction:column;justify-content:center;align-items:center;gap:5px;width:40px;height:40px;background:rgba(255,255,255,0.15);border:none;border-radius:8px;cursor:pointer;padding:8px;flex-shrink:0;}
 .hamburger-btn span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all 0.2s;}
@@ -1858,17 +1876,46 @@ function renderPunchout(){
         </div>
         <div id="poItems_${turn.id}">`;
 
-    // Render existing items
-    let itemsHtml='';
+    // Render existing items — support both old string format and new {text,photos} format
+    card.innerHTML+=`</div>`;
+    const poItemsWrap=card.querySelector('#poItems_'+turn.id);
     items.forEach((item,i)=>{
-      itemsHtml+=`<div class="punchout-item" id="poItem_${turn.id}_${i}">
-        <div class="custom-check"></div>
-        <div class="punchout-item-label">${item}</div>
-        <button class="punchout-item-del" onclick="removePoItem('${turn.id}',${i})" title="Remove">✕</button>
-      </div>`;
+      const text=typeof item==='string'?item:(item.text||'');
+      const photos=typeof item==='object'&&item.photos?item.photos:[];
+      const wrap=document.createElement('div'); wrap.className='po-item-wrap';
+      // Row: label + photo button + delete
+      const row=document.createElement('div'); row.className='po-item-row';
+      const lbl=document.createElement('div'); lbl.className='po-item-label'; lbl.textContent=text;
+      const acts=document.createElement('div'); acts.className='po-item-actions';
+      // Photo attach button
+      const photoBtn=document.createElement('button'); photoBtn.className='po-photo-btn';
+      photoBtn.innerHTML='📷 '+(photos.length>0?photos.length+' photo'+(photos.length>1?'s':''):'Add Photo');
+      photoBtn.onclick=()=>triggerPhotoInput(turn.id,i);
+      // Hidden file input — accept images, allow camera on mobile
+      const fileInp=document.createElement('input');
+      fileInp.type='file'; fileInp.accept='image/*'; fileInp.capture='environment';
+      fileInp.style.display='none'; fileInp.id='poFileInp_'+turn.id+'_'+i;
+      fileInp.onchange=(e)=>handlePoPhoto(e,turn.id,i);
+      // Delete item button
+      const delBtn=document.createElement('button'); delBtn.className='punchout-item-del'; delBtn.textContent='✕'; delBtn.title='Remove item';
+      delBtn.onclick=()=>removePoItem(turn.id,i);
+      acts.appendChild(photoBtn); acts.appendChild(fileInp); acts.appendChild(delBtn);
+      row.appendChild(lbl); row.appendChild(acts); wrap.appendChild(row);
+      // Photo thumbnails
+      if(photos.length>0){
+        const photoRow=document.createElement('div'); photoRow.className='po-photos';
+        photos.forEach((src,pi)=>{
+          const thumb=document.createElement('div'); thumb.className='po-photo-thumb';
+          const img=document.createElement('img'); img.src=src; img.alt='photo';
+          img.onclick=()=>openLightbox(src);
+          const delbtn=document.createElement('button'); delbtn.className='po-photo-del'; delbtn.textContent='✕';
+          delbtn.onclick=(e)=>{e.stopPropagation();removePoPhoto(turn.id,i,pi);};
+          thumb.appendChild(img); thumb.appendChild(delbtn); photoRow.appendChild(thumb);
+        });
+        wrap.appendChild(photoRow);
+      }
+      poItemsWrap.appendChild(wrap);
     });
-
-    card.innerHTML+=itemsHtml+`</div>`;
 
     if(items.length>0){
       const sendBtn=document.createElement('button');
@@ -1928,10 +1975,65 @@ function addPoItem(turnId){
   const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
   if(!turn) return;
   if(!turn.punchoutItems) turn.punchoutItems=[];
-  turn.punchoutItems.push(val);
+  turn.punchoutItems.push({text:val, photos:[]});
   saveTurn(turn);
   inp.value='';
   renderPunchout();
+}
+
+function triggerPhotoInput(turnId, idx){
+  const inp=document.getElementById('poFileInp_'+turnId+'_'+idx);
+  if(inp) inp.click();
+}
+
+function handlePoPhoto(e, turnId, idx){
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    const turns=getTurns();
+    const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
+    if(!turn||!turn.punchoutItems||!turn.punchoutItems[idx]) return;
+    // Migrate string items to object format
+    if(typeof turn.punchoutItems[idx]==='string'){
+      turn.punchoutItems[idx]={text:turn.punchoutItems[idx], photos:[]};
+    }
+    if(!turn.punchoutItems[idx].photos) turn.punchoutItems[idx].photos=[];
+    // Resize image before storing to keep Firestore doc size manageable
+    const img=new Image();
+    img.onload=function(){
+      const MAX=800;
+      let w=img.width, h=img.height;
+      if(w>MAX||h>MAX){ if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;} }
+      const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const dataUrl=canvas.toDataURL('image/jpeg',0.75);
+      turn.punchoutItems[idx].photos.push(dataUrl);
+      saveTurn(turn);
+      renderPunchout();
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value=''; // reset so same file can be re-selected
+}
+
+function removePoPhoto(turnId, itemIdx, photoIdx){
+  const turns=getTurns();
+  const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
+  if(!turn||!turn.punchoutItems||!turn.punchoutItems[itemIdx]) return;
+  if(typeof turn.punchoutItems[itemIdx]==='string') return;
+  turn.punchoutItems[itemIdx].photos.splice(photoIdx,1);
+  saveTurn(turn);
+  renderPunchout();
+}
+
+function openLightbox(src){
+  document.getElementById('poLightboxImg').src=src;
+  document.getElementById('poLightbox').classList.add('open');
+}
+function closeLightbox(){
+  document.getElementById('poLightbox').classList.remove('open');
+  document.getElementById('poLightboxImg').src='';
 }
 
 function removePoItem(turnId, idx){
@@ -1939,7 +2041,6 @@ function removePoItem(turnId, idx){
   const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
   if(!turn||!turn.punchoutItems) return;
   turn.punchoutItems.splice(idx,1);
-  // Also clean up any progress for removed item
   if(turn.poProgress){
     const newProg={};
     Object.entries(turn.poProgress).forEach(([k,v])=>{ if(parseInt(k)<idx) newProg[k]=v; else if(parseInt(k)>idx) newProg[parseInt(k)-1]=v; });
@@ -1953,9 +2054,11 @@ function sendPunchoutToSub(turnId){
   const turns=getTurns();
   const turn=turns.find(t=>t.id===parseInt(turnId)||t.id===turnId);
   if(!turn||!turn.punchoutItems||turn.punchoutItems.length===0){showToast('Add at least one item first','error');return;}
+  const photoCount=(turn.punchoutItems||[]).reduce((acc,it)=>acc+(typeof it==='object'&&it.photos?it.photos.length:0),0);
+  const photoNote=photoCount>0?` with ${photoCount} photo${photoCount!==1?'s':''} attached`:'';
   showConfirm(
     'Send Punch-Out List',
-    `Send the punch-out list with <strong>${turn.punchoutItems.length} item${turn.punchoutItems.length!==1?'s':''}</strong> to the subcontractor for Unit <strong>${turn.unit}</strong>?`,
+    `Send the punch-out list with <strong>${turn.punchoutItems.length} item${turn.punchoutItems.length!==1?'s':''}</strong>${photoNote} to the subcontractor for Unit <strong>${turn.unit}</strong>?`,
     [
       {label:'Cancel',style:'btn-ghost',onClick:()=>{}},
       {label:'Send',style:'btn-primary',onClick:()=>{
@@ -2065,5 +2168,10 @@ function addSubNote(turnId){
 renderChecklist();
 initPinKeypad();
 </script>
+<!-- PHOTO LIGHTBOX -->
+<div class="po-lightbox" id="poLightbox" onclick="closeLightbox()">
+  <button class="po-lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="poLightboxImg" src="" alt="Punch-out photo">
+</div>
 </body>
 </html>
