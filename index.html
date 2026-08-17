@@ -121,6 +121,22 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
 .turn-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:11px;overflow:hidden;border-left:4px solid var(--mid-gray);}
 .turn-card.status-active{border-left-color:var(--gold);}
 .turn-card.status-complete{border-left-color:var(--green);}
+
+/* ── HAMBURGER MENU (mobile only) ── */
+.hamburger-btn{display:none;flex-direction:column;justify-content:center;align-items:center;gap:5px;width:40px;height:40px;background:rgba(255,255,255,0.15);border:none;border-radius:8px;cursor:pointer;padding:8px;flex-shrink:0;}
+.hamburger-btn span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all 0.2s;}
+.hamburger-btn.open span:nth-child(1){transform:translateY(7px) rotate(45deg);}
+.hamburger-btn.open span:nth-child(2){opacity:0;}
+.hamburger-btn.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg);}
+.mobile-dropdown{display:none;position:absolute;top:60px;right:10px;background:var(--navy);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:1000;min-width:180px;padding:8px 0;overflow:hidden;}
+.mobile-dropdown.open{display:block;}
+.mobile-dropdown .nav-btn{display:flex;width:100%;text-align:left;border-radius:0;padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.1);font-size:14px;justify-content:flex-start;gap:10px;}
+.mobile-dropdown .nav-btn:last-child{border-bottom:none;}
+.mobile-dropdown .nav-btn.active{background:rgba(255,255,255,0.15);}
+@media(max-width:700px){
+  .hamburger-btn{display:flex;}
+  .header-nav{display:none !important;}
+}
 .turn-card.status-overdue{border-left-color:var(--red);}
 .turn-card-top{display:flex;align-items:center;justify-content:space-between;padding:13px 15px 9px;gap:10px;flex-wrap:wrap;}
 .turn-unit{font-size:16px;font-weight:700;color:var(--navy);}
@@ -357,6 +373,19 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
     <button class="nav-btn admin-only" onclick="showScreen('punchout')" id="nav-punchout">🔎 <span>Punch-Out</span></button>
     <button class="nav-btn admin-only" onclick="showScreen('finalwalk')" id="nav-finalwalk">✅ <span>Final</span></button>
     <button class="nav-btn lock-btn" onclick="goToLanding()">🏠</button>
+  </div>
+  <!-- HAMBURGER (mobile only) -->
+  <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleMobileMenu()" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="mobile-dropdown" id="mobileDropdown">
+    <button class="nav-btn" onclick="mobileNav('sub')" id="mnav-sub">📋 My Tasks</button>
+    <button class="nav-btn admin-only" onclick="mobileNav('walkthrough')" id="mnav-walkthrough">🔍 Walkthrough</button>
+    <button class="nav-btn admin-only" onclick="mobileNav('tracker')" id="mnav-tracker">📊 Tracker</button>
+    <button class="nav-btn admin-only" onclick="mobileNav('materials')" id="mnav-materials">🧰 Materials</button>
+    <button class="nav-btn admin-only" onclick="mobileNav('punchout')" id="mnav-punchout">🔎 Punch-Out</button>
+    <button class="nav-btn admin-only" onclick="mobileNav('finalwalk')" id="mnav-finalwalk">✅ Final Walk</button>
+    <button class="nav-btn lock-btn" onclick="mobileNav(null)">🏠 Home</button>
   </div>
 </header>
 
@@ -634,12 +663,44 @@ document.addEventListener('keydown',e=>{
   }
 });
 
+// ─── MOBILE HAMBURGER ─────────────────────────────────
+function toggleMobileMenu(){
+  const btn = document.getElementById('hamburgerBtn');
+  const dd = document.getElementById('mobileDropdown');
+  btn.classList.toggle('open');
+  dd.classList.toggle('open');
+}
+function mobileNav(screen){
+  // Close menu
+  document.getElementById('hamburgerBtn').classList.remove('open');
+  document.getElementById('mobileDropdown').classList.remove('open');
+  // Update active state in dropdown
+  document.querySelectorAll('.mobile-dropdown .nav-btn').forEach(b=>b.classList.remove('active'));
+  if(screen){
+    const mb = document.getElementById('mnav-'+screen);
+    if(mb) mb.classList.add('active');
+    showScreen(screen);
+  } else {
+    goToLanding();
+  }
+}
+// Close dropdown if tapping outside
+document.addEventListener('click', function(e){
+  const btn = document.getElementById('hamburgerBtn');
+  const dd = document.getElementById('mobileDropdown');
+  if(btn && dd && !btn.contains(e.target) && !dd.contains(e.target)){
+    btn.classList.remove('open');
+    dd.classList.remove('open');
+  }
+});
+
 // ─── NAV ──────────────────────────────────────────────
 function showScreen(name){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('screen-'+name).classList.add('active');
   const nb=document.getElementById('nav-'+name); if(nb) nb.classList.add('active');
+  const mnb=document.getElementById('mnav-'+name); if(mnb) mnb.classList.add('active');
   if(name==='tracker') renderTracker();
   if(name==='materials') renderMaterials();
   if(name==='punchout') renderPunchout();
