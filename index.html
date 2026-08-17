@@ -2122,10 +2122,25 @@ function renderFinalWalk(){
       poTitle.textContent='Punch-Out Items (All Resolved)';
       body.appendChild(poTitle);
       turn.punchoutItems.forEach(item=>{
+        const itemText=typeof item==='string'?item:(item.text||'');
+        const itemPhotos=typeof item==='object'&&item.photos?item.photos:[];
+        const wrap=document.createElement('div'); wrap.className='po-item-wrap';
         const row=document.createElement('div'); row.className='punchout-item done';
         const chk=document.createElement('div'); chk.className='custom-check checked';
-        const lbl=document.createElement('div'); lbl.className='punchout-item-label'; lbl.textContent=item;
-        row.appendChild(chk); row.appendChild(lbl); body.appendChild(row);
+        const lbl=document.createElement('div'); lbl.className='punchout-item-label'; lbl.textContent=itemText;
+        row.appendChild(chk); row.appendChild(lbl); wrap.appendChild(row);
+        if(itemPhotos.length>0){
+          const photoRow=document.createElement('div'); photoRow.className='po-photos';
+          photoRow.style.paddingLeft='28px';
+          itemPhotos.forEach(src=>{
+            const thumb=document.createElement('div'); thumb.className='po-photo-thumb';
+            const img=document.createElement('img'); img.src=src; img.alt='photo';
+            img.onclick=()=>openLightbox(src);
+            thumb.appendChild(img); photoRow.appendChild(thumb);
+          });
+          wrap.appendChild(photoRow);
+        }
+        body.appendChild(wrap);
       });
     }
 
