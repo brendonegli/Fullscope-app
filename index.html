@@ -510,11 +510,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
   window._turns = [];
   window._firestoreReady = false;
 
+  // Track page load time so we can ignore snapshots that fire during startup
+  const _appStartTime = Date.now();
   _turnsCol.onSnapshot((snapshot) => {
     window._turns = snapshot.docs.map(d => d.data());
     window._firestoreReady = true;
-    // Only re-render if the user is already unlocked — don't interfere with PIN flow
-    if(!window.isUnlocked) return;
+    // Ignore snapshots that fire within 3 seconds of page load (startup sync)
+    // and only re-render if the user is already unlocked
+    const timeSinceStart = Date.now() - _appStartTime;
+    if(timeSinceStart < 3000 || !window.isUnlocked) return;
     const active = document.querySelector('.screen.active');
     if(active){
       const id = active.id;
