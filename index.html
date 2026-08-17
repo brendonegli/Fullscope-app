@@ -1306,7 +1306,9 @@ function renderTracker(){
         <div class="turn-property">${turn.property}${turn.sub?' · '+turn.sub:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
-        <div class="turn-due${isOverdue&&status!=='complete'?' overdue':''}">Due: ${dueFmt}</div>
+        ${turn.status==='complete'&&turn.completedAt
+          ? `<div class="turn-due" style="color:var(--green);">✓ Completed: ${new Date(turn.completedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>`
+          : `<div class="turn-due${isOverdue?' overdue':''}">Due: ${dueFmt}</div>`}
         <span class="status-badge badge-${status}">${status}</span>
         <span class="stage-badge stage-${turn.stage||'inprogress'}">${stageLabel}</span>
         <strong style="font-size:14px;color:var(--navy)">$${(turn.total||0).toFixed(2)}</strong>
@@ -1330,7 +1332,7 @@ function renderTracker(){
     editBtn.onclick=(e)=>{e.stopPropagation();openEditModal(turn.id);}; actions.appendChild(editBtn);
     if(turn.status!=='complete'){
       const markBtn=document.createElement('button'); markBtn.className='btn btn-sm btn-gold'; markBtn.textContent='✓ Mark Complete';
-      markBtn.onclick=(e)=>{e.stopPropagation();const ts=getTurns();const t=ts.find(t=>t.id===turn.id);if(t){t.status='complete';saveTurn(t);renderTracker();}};
+      markBtn.onclick=(e)=>{e.stopPropagation();const ts=getTurns();const t=ts.find(t=>t.id===turn.id);if(t){t.status='complete';t.completedAt=new Date().toISOString();saveTurn(t);renderTracker();}};
       actions.appendChild(markBtn);
     }
     const delBtn=document.createElement('button'); delBtn.className='btn btn-sm btn-danger'; delBtn.textContent='🗑 Delete';
