@@ -1773,10 +1773,22 @@ function renderSubView(turn, container){
       <div class="progress-label">${done} of ${total} items fixed</div>`;
     poItems.forEach((item,i)=>{
       const isDone=!!poProgress[i];
+      // Support both old string format and new {text, photos} format
+      const itemText=typeof item==='string'?item:(item.text||'');
+      const itemPhotos=typeof item==='object'&&item.photos?item.photos:[];
+      // Photos rendered as tappable thumbnails (read-only for sub)
+      let photosHtml='';
+      if(itemPhotos.length>0){
+        photosHtml='<div class="po-photos" style="margin-top:6px;padding-left:28px;">';
+        itemPhotos.forEach((src,pi)=>{
+          photosHtml+=`<div class="po-photo-thumb" onclick="openLightbox('${src.replace(/'/g,"\\'")}')"><img src="${src}" alt="photo ${pi+1}"></div>`;
+        });
+        photosHtml+='</div>';
+      }
       html+=`<div class="sub-task-row${isDone?' done':''}" onclick="togglePoTask('${turn.id}',${i})">
         <div class="custom-check${isDone?' checked':''}"></div>
-        <div class="sub-task-label">${item}</div>
-      </div>`;
+        <div class="sub-task-label">${itemText}</div>
+      </div>${photosHtml}`;
     });
     const allDone=done===total&&total>0;
     html+=`<button class="ready-btn ${allDone?'unlocked':'locked'}" ${allDone?`onclick="submitFinalWalk('${turn.id}')"`:'disabled'}>
