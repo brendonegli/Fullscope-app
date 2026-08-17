@@ -1817,43 +1817,40 @@ function renderPunchout(){
       hint.style.cssText='font-size:13px;color:var(--mid-gray);text-align:center;padding:10px 0;';
       hint.textContent='Add at least one item to send the punch-out list.';
       card.querySelector('.punchout-card-body').appendChild(hint);
-
-      // "No punch-out needed" two-step complete button
-      const noPoBtn=document.createElement('button');
-      noPoBtn.className='btn btn-sm btn-ghost';
-      noPoBtn.style.cssText='width:100%;margin-top:6px;border:1.5px dashed var(--mid-gray);color:var(--dark-gray);font-size:13px;';
-      noPoBtn.textContent='✓ No Punch-Out Needed — Mark Complete';
-      let _noPoArmed=false;
-      let _noPoTimer=null;
-      noPoBtn.onclick=()=>{
-        if(!_noPoArmed){
-          // First click: arm it
-          _noPoArmed=true;
-          noPoBtn.textContent='⚠️ Confirm — Click Again to Mark Complete';
-          noPoBtn.style.cssText='width:100%;margin-top:6px;background:var(--red);color:#fff;border:none;font-size:13px;font-weight:700;';
-          _noPoTimer=setTimeout(()=>{
-            // Reset if not confirmed within 3 seconds
-            _noPoArmed=false;
-            noPoBtn.textContent='✓ No Punch-Out Needed — Mark Complete';
-            noPoBtn.style.cssText='width:100%;margin-top:6px;border:1.5px dashed var(--mid-gray);color:var(--dark-gray);font-size:13px;';
-          }, 3000);
-        } else {
-          // Second click: confirm and complete
-          clearTimeout(_noPoTimer);
-          const ts=getTurns();
-          const t=ts.find(t=>t.id===turn.id);
-          if(t){
-            t.status='complete';
-            t.stage='complete';
-            t.completedAt=new Date().toISOString();
-            saveTurn(t);
-            showToast('Unit '+turn.unit+' marked complete — no punch-out ✓','success');
-            renderPunchout();
-          }
-        }
-      };
-      card.querySelector('.punchout-card-body').appendChild(noPoBtn);
     }
+
+    // Always show "No Punch-Out Needed" button — two-step confirm to prevent accidents
+    const noPoBtn=document.createElement('button');
+    noPoBtn.className='btn btn-sm btn-ghost';
+    noPoBtn.style.cssText='width:100%;margin-top:10px;border:1.5px dashed var(--mid-gray);color:var(--dark-gray);font-size:13px;';
+    noPoBtn.textContent='✓ No Punch-Out Needed — Mark Complete';
+    let _noPoArmed=false;
+    let _noPoTimer=null;
+    noPoBtn.onclick=()=>{
+      if(!_noPoArmed){
+        _noPoArmed=true;
+        noPoBtn.textContent='⚠️ Confirm — Click Again to Mark Complete';
+        noPoBtn.style.cssText='width:100%;margin-top:10px;background:var(--red);color:#fff;border:none;font-size:13px;font-weight:700;';
+        _noPoTimer=setTimeout(()=>{
+          _noPoArmed=false;
+          noPoBtn.textContent='✓ No Punch-Out Needed — Mark Complete';
+          noPoBtn.style.cssText='width:100%;margin-top:10px;border:1.5px dashed var(--mid-gray);color:var(--dark-gray);font-size:13px;';
+        }, 3000);
+      } else {
+        clearTimeout(_noPoTimer);
+        const ts=getTurns();
+        const t=ts.find(t=>t.id===turn.id);
+        if(t){
+          t.status='complete';
+          t.stage='complete';
+          t.completedAt=new Date().toISOString();
+          saveTurn(t);
+          showToast('Unit '+turn.unit+' marked complete — no punch-out ✓','success');
+          renderPunchout();
+        }
+      }
+    };
+    card.querySelector('.punchout-card-body').appendChild(noPoBtn);
 
     wrap.appendChild(card);
   });
