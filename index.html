@@ -1096,7 +1096,6 @@ function renderBilling(){
 function updateTotal(){
   let t = 0;
   let generalTurnCounted = false;
-  const breakdown = [];
 
   TASKS.forEach(task => {
     const subs = task.subtasks || [];
@@ -1106,31 +1105,18 @@ function updateTotal(){
       if(GENERAL_TURN_SUBTASK_IDS.has(subs[0].id)){
         if(!generalTurnCounted){
           generalTurnCounted = true;
-          const v = billingPrices['general_turn'] || 0;
-          t += v;
-          breakdown.push('general_turn: $'+v);
+          t += billingPrices['general_turn'] || 0;
         }
       } else {
         subs.forEach(s => {
-          if(checkedTasks[s.id]){
-            const v = billingPrices[s.id] || 0;
-            t += v;
-            breakdown.push(s.id+': $'+v);
-          }
+          if(checkedTasks[s.id]) t += billingPrices[s.id] || 0;
         });
       }
     } else {
       if(!checkedTasks[task.id]) return;
-      const v = billingPrices[task.id] || 0;
-      t += v;
-      breakdown.push(task.id+': $'+v);
+      t += billingPrices[task.id] || 0;
     }
   });
-
-  console.log('[updateTotal] checkedTasks:', JSON.stringify(checkedTasks));
-  console.log('[updateTotal] billingPrices:', JSON.stringify(billingPrices));
-  console.log('[updateTotal] breakdown:', breakdown);
-  console.log('[updateTotal] TOTAL:', t);
 
   document.getElementById('billingTotal').textContent='$'+t.toFixed(2);
 }
