@@ -350,19 +350,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
 </div>
 
 <!-- EDIT TURN MODAL -->
-<div class="modal-overlay hidden" id="editModal">
-  <div class="modal-box">
-    <div class="modal-header">
-      <h3>Edit Turn</h3>
-      <button class="modal-close" onclick="closeEditModal()">✕</button>
-    </div>
-    <div class="modal-body" id="editModalBody"></div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost btn-sm" onclick="closeEditModal()">Cancel</button>
-      <button class="btn btn-gold btn-sm" onclick="saveEdit()">Save Changes</button>
-    </div>
-  </div>
-</div>
+
 
 <!-- LANDING SCREEN -->
 <div class="screen active" id="screen-landing">
@@ -439,8 +427,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
 <!-- WALKTHROUGH SCREEN -->
 <div class="screen" id="screen-walkthrough">
   <div class="page-wrap">
+    <div id="walkthroughEditBanner" style="display:none;background:var(--gold);color:#fff;border-radius:10px;padding:10px 16px;margin-bottom:14px;font-size:13px;font-weight:600;display:none;align-items:center;justify-content:space-between;gap:10px;">
+      <span>✏️ Editing Unit <span id="walkthroughEditUnit"></span> — changes will update the saved turn</span>
+      <button onclick="cancelEditWalkthrough()" style="background:rgba(255,255,255,0.3);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;">✕ Cancel Edit</button>
+    </div>
     <div class="page-title">Unit Walkthrough</div>
-    <div class="page-subtitle">Check tasks, generate materials, and save the turn</div>
+    <div class="page-subtitle" id="walkthroughSubtitle">Check tasks, generate materials, and save the turn</div>
 
     <div class="card">
       <div class="card-header">🏠 Unit Info</div>
@@ -1234,7 +1226,20 @@ function initSave(){
   const checked=Object.keys(checkedTasks).filter(k=>checkedTasks[k]);
   if(checked.length===0){showToast('Please check at least one task.','error');return;}
 
-  // Check for existing active turn with same unit number
+  // ── EDIT MODE: update existing turn in place ──
+  if(_editingTurnId){
+    showConfirm(
+      'Save Scope Changes',
+      `Save changes to <strong>Unit ${unit}</strong>? This will update the scope, billing, and materials for this turn.`,
+      [
+        {label:'Cancel', style:'btn-ghost', onClick:()=>{}},
+        {label:'Save Changes', style:'btn-gold', onClick:()=>doEditSave(unit,due,sub,checked)},
+      ]
+    );
+    return;
+  }
+
+  // ── NEW TURN: check for duplicate ──
   const existing=getTurns().find(t=>t.unit.toUpperCase()===unit&&t.status!=='complete');
   if(existing){
     showConfirm(
@@ -1248,6 +1253,41 @@ function initSave(){
     return;
   }
   doSave(unit,due,sub,checked,null);
+}
+
+function doEditSave(unit,due,sub,checked){
+  const turns=getTurns();
+  const turn=turns.find(t=>t.id===_editingTurnId);
+  if(!turn){ showToast('Turn not found','error'); return; }
+
+  const finalVarQtys={...varQtys};
+  if((finalVarQtys['dishwasher']||0)>0) finalVarQtys['dw_supply']=finalVarQtys['dishwasher'];
+  const total=Object.entries(billingPrices).reduce((sum,[key,val])=>{
+    if(GENERAL_TURN_SUBTASK_IDS.has(key)) return sum;
+    return sum+(val||0);
+  },0);
+
+  // Update scope fields — preserve stage, punchout, progress, dates
+  turn.unit=unit; turn.due=due; turn.sub=sub;
+  turn.tasks=checked; turn.notes={...taskNotes}; turn.billing={...billingPrices};
+  turn.generalTurnType=generalTurnType; turn.varQtys=finalVarQtys; turn.total=total;
+  turn.property=selectedProperty;
+
+  saveTurn(turn);
+  showToast('Unit '+unit+' scope updated ✓','success');
+
+  // Exit edit mode and go back to tracker
+  _editingTurnId=null;
+  const banner=document.getElementById('walkthroughEditBanner');
+  if(banner) banner.style.display='none';
+  // Clear walkthrough for next use
+  checkedTasks={}; taskNotes={}; billingPrices={}; openSections={}; varQtys={}; generalTurnType='full';
+  document.getElementById('unitNumber').value='';
+  document.getElementById('dueDate').value='';
+  document.getElementById('subName').value='';
+  renderChecklist();
+  showScreen('tracker');
+  renderTracker();
 }
 
 function doSave(unit,due,sub,checked,overwriteId){
@@ -1267,12 +1307,9 @@ function doSave(unit,due,sub,checked,overwriteId){
     created:new Date().toISOString(), matStatus:{}
   };
 
-  let turns=getTurns();
   if(overwriteId){
-    turns=turns.map(t=>t.id===overwriteId?turn:t);
     showToast('Unit '+unit+' overwritten ✓','warning');
   } else {
-    turns.push(turn);
     showToast('Unit '+unit+' saved ✓','success');
   }
   saveTurn(turn);
@@ -1497,237 +1534,236 @@ function toggleAccordion(turnId){
   if(el) el.classList.toggle('open', openAccordions.has(turnId));
 }
 
-// ─── EDIT MODAL ───────────────────────────────────────
-let editingTurnId=null;
-// ─── EDIT TURN MODAL (full scope editor) ──────────────
-let _editChecked={};   // task checkbox state for edit modal
-let _editNotes={};     // task notes for edit modal
-let _editBilling={};   // billing prices for edit modal
-let _editVarQtys={};   // variable material qtys for edit modal
-let _editGenType='full'; // general turn type for edit modal
-let _editProperty='';
+// ─── EDIT TURN — load into walkthrough ────────────────
+let _editingTurnId = null; // non-null when walkthrough is in edit mode
 
 function openEditModal(id){
-  editingTurnId=id;
-  const turns=getTurns(); const turn=turns.find(t=>t.id===id); if(!turn) return;
-
-  // Seed edit state from saved turn
-  _editChecked={};
-  (turn.tasks||[]).forEach(tid=>{ _editChecked[tid]=true; });
-  _editNotes={...(turn.notes||{})};
-  _editBilling={...(turn.billing||{})};
-  _editVarQtys={...(turn.varQtys||{})};
-  _editGenType=turn.generalTurnType||'full';
-  _editProperty=turn.property||'Orchards';
-
-  const body=document.getElementById('editModalBody');
-  body.innerHTML='';
-
-  // ── Unit info fields ──
-  const info=document.createElement('div');
-  info.innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-      <div class="form-group">
-        <label>Unit</label>
-        <input type="text" id="editUnit" value="${turn.unit||''}" placeholder="e.g. 204B">
-      </div>
-      <div class="form-group">
-        <label>Due Date</label>
-        <input type="date" id="editDue" value="${turn.due||''}">
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-      <div class="form-group">
-        <label>Subcontractor</label>
-        <input type="text" id="editSub" value="${turn.sub||''}" placeholder="Name or business">
-      </div>
-      <div class="form-group">
-        <label>Status</label>
-        <select id="editStatus">
-          <option value="active"${turn.status==='active'?' selected':''}>Active</option>
-          <option value="complete"${turn.status==='complete'?' selected':''}>Complete</option>
-        </select>
-      </div>
-    </div>`;
-  body.appendChild(info);
-
-  // ── Section divider ──
-  const divider=document.createElement('div');
-  divider.style.cssText='font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--dark-gray);margin-bottom:10px;padding-top:4px;border-top:1px solid var(--light-gray);padding-top:12px;';
-  divider.textContent='Task Checklist';
-  body.appendChild(divider);
-
-  // ── Task checklist (mirrors walkthrough) ──
-  const checkWrap=document.createElement('div');
-  checkWrap.id='editChecklist';
-  body.appendChild(checkWrap);
-  renderEditChecklist();
-
-  // ── Billing section ──
-  const billDiv=document.createElement('div');
-  billDiv.style.cssText='margin-top:14px;padding-top:12px;border-top:1px solid var(--light-gray);';
-  billDiv.innerHTML='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--dark-gray);margin-bottom:10px;">Billing</div>';
-  const billTable=document.createElement('div'); billTable.id='editBillTable';
-  billDiv.appendChild(billTable);
-  body.appendChild(billDiv);
-  renderEditBilling();
-
-  document.getElementById('editModal').classList.remove('hidden');
+  // Navigate to walkthrough tab with this turn loaded
+  const turns=getTurns();
+  const turn=turns.find(t=>t.id===id);
+  if(!turn) return;
+  loadTurnIntoWalkthrough(turn);
+  showScreen('walkthrough');
+  // Scroll to top of walkthrough
+  setTimeout(()=>{ document.getElementById('screen-walkthrough').scrollTop=0; window.scrollTo(0,0); },50);
 }
 
-function renderEditChecklist(){
-  const wrap=document.getElementById('editChecklist'); if(!wrap) return;
-  wrap.innerHTML='';
-  const pricing=SUB_PRICING[_editProperty]||SUB_PRICING['Orchards'];
+function loadTurnIntoWalkthrough(turn){
+  _editingTurnId=turn.id;
 
-  TASKS.forEach(task=>{
-    const hasSubs=task.subtasks&&task.subtasks.length>0;
-    const parentChecked=hasSubs?task.subtasks.some(s=>_editChecked[s.id]):!!_editChecked[task.id];
-    const section=document.createElement('div'); section.className='task-section';
+  // Set property
+  selectedProperty=turn.property||'Orchards';
+  document.querySelectorAll('.prop-btn').forEach(b=>b.classList.remove('active'));
+  const propBtn=document.getElementById('prop-'+selectedProperty.toLowerCase());
+  if(propBtn) propBtn.classList.add('active');
 
-    const header=document.createElement('div');
-    header.className='task-section-header'+(parentChecked?' has-checked':'');
+  // Set unit info fields
+  document.getElementById('unitNumber').value=turn.unit||'';
+  document.getElementById('dueDate').value=turn.due||'';
+  document.getElementById('subName').value=turn.sub||'';
 
-    const chk=document.createElement('div'); chk.className='custom-check'+(parentChecked?' checked':'');
-    const lbl=document.createElement('span'); lbl.style.cssText='font-weight:600;font-size:14px;'; lbl.textContent=task.label;
-    header.appendChild(chk); header.appendChild(lbl);
-    header.onclick=()=>{
-      if(hasSubs){
-        // Toggle all subtasks
-        const anyOn=task.subtasks.some(s=>_editChecked[s.id]);
-        task.subtasks.forEach(s=>{ _editChecked[s.id]=!anyOn; });
-      } else {
-        _editChecked[task.id]=!_editChecked[task.id];
-      }
-      renderEditChecklist(); renderEditBilling();
+  // Restore checkedTasks
+  checkedTasks={};
+  (turn.tasks||[]).forEach(tid=>{ checkedTasks[tid]=true; });
+
+  // Restore notes
+  taskNotes={...(turn.notes||{})};
+
+  // Restore billing prices
+  billingPrices={...(turn.billing||{})};
+
+  // Restore varQtys
+  varQtys={...(turn.varQtys||{})};
+
+  // Restore generalTurnType
+  generalTurnType=turn.generalTurnType||'full';
+
+  // Open sections for checked parent tasks
+  openSections={};
+  TASKS.forEach(t=>{
+    if(t.subtasks&&t.subtasks.length){
+      if(t.subtasks.some(s=>checkedTasks[s.id])) openSections[t.id]=true;
+    }
+  });
+
+  // Show editing banner
+  const banner=document.getElementById('walkthroughEditBanner');
+  if(banner){ banner.style.display='flex'; document.getElementById('walkthroughEditUnit').textContent=turn.unit; }
+
+  // Re-render checklist, materials, billing
+  renderChecklist();
+  renderMaterialPreview();
+  renderBilling();
+}
+
+function cancelEditWalkthrough(){
+  _editingTurnId=null;
+  // Hide banner, clear form
+  const banner=document.getElementById('walkthroughEditBanner');
+  if(banner) banner.style.display='none';
+  checkedTasks={}; taskNotes={}; billingPrices={}; openSections={}; varQtys={}; generalTurnType='full';
+  document.getElementById('unitNumber').value='';
+  document.getElementById('dueDate').value='';
+  document.getElementById('subName').value='';
+  selectedProperty='Orchards';
+  document.querySelectorAll('.prop-btn').forEach(b=>b.classList.remove('active'));
+  const pb=document.getElementById('prop-orchards'); if(pb) pb.classList.add('active');
+  renderChecklist();
+  showScreen('tracker');
+}
+
+function closeEditModal(){ /* no-op — edit now uses walkthrough tab */ }
+
+// ─── TRACKER ──────────────────────────────────────────
+let openAccordions = new Set();
+
+function renderTracker(){
+  const list=document.getElementById('trackerList'); list.innerHTML='';
+  const turns=getTurns();
+  if(turns.length===0){list.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><p>No turns saved yet.</p></div>';return;}
+  const sorted=[...turns].sort((a,b)=>new Date(a.due)-new Date(b.due));
+  sorted.forEach(turn=>{
+    const today=new Date(); today.setHours(0,0,0,0);
+    const dd=new Date(turn.due+'T00:00:00');
+    const isOverdue=dd<today&&turn.status!=='complete';
+    const status=turn.status==='complete'?'complete':isOverdue?'overdue':'active';
+    const dueFmt=dd.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const stageLabelMap={inprogress:'In Progress',punchout:'Punch-Out',subfix:'Sub Fixing',finalwalk:'Final Walk',complete:'Complete'};
+    const stageLabel=stageLabelMap[turn.stage||'inprogress']||'';
+    const subProgress=turn.subProgress||{};
+    const doneCount=turn.tasks.filter(id=>subProgress[id]).length;
+    const totalCount=turn.tasks.length;
+    const pct=totalCount>0?Math.round(doneCount/totalCount*100):0;
+    const hasNotes=turn.subNotes&&turn.subNotes.length>0;
+
+    const card=document.createElement('div'); card.className='turn-card status-'+status;
+    card.dataset.id=turn.id;
+
+    // ── TOP (clickable to toggle accordion) ──
+    const top=document.createElement('div'); top.className='turn-card-top';
+    top.style.cursor='pointer';
+
+    // Flag badge if sub has notes
+    const flagHtml=hasNotes?'<span class="flag-badge">🚩 '+turn.subNotes.length+' Note'+(turn.subNotes.length>1?'s':'')+'</span>':'';
+
+    top.innerHTML=`
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+          <div class="turn-unit">Unit ${turn.unit}</div>
+          ${flagHtml}
+        </div>
+        <div class="turn-property">${turn.property}${turn.sub?' · '+turn.sub:''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+        ${turn.status==='complete'&&turn.completedAt
+          ? `<div class="turn-due" style="color:var(--green);">✓ Completed: ${new Date(turn.completedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>`
+          : `<div class="turn-due${isOverdue?' overdue':''}">Due: ${dueFmt}</div>`}
+        <span class="status-badge badge-${status}">${status}</span>
+        <span class="stage-badge stage-${turn.stage||'inprogress'}">${stageLabel}</span>
+        <strong style="font-size:14px;color:var(--navy)">$${(turn.total||0).toFixed(2)}</strong>
+        <span style="font-size:11px;color:var(--mid-gray);">${pct}% done</span>
+      </div>`;
+    top.onclick=()=>toggleAccordion(turn.id);
+
+    // ── TASK CHIPS (green if done) ──
+    const tw=document.createElement('div'); tw.className='turn-card-tasks';
+    turn.tasks.forEach(id=>{
+      const isDone=!!subProgress[id];
+      const chip=document.createElement('span');
+      chip.className='task-chip'+(isDone?' chip-done':'');
+      chip.textContent=TASK_LABELS[id]||id;
+      tw.appendChild(chip);
+    });
+
+    // ── ACTIONS ──
+    const actions=document.createElement('div'); actions.className='turn-card-actions';
+    const editBtn=document.createElement('button'); editBtn.className='btn btn-sm btn-ghost'; editBtn.textContent='✏️ Edit';
+    editBtn.onclick=(e)=>{e.stopPropagation();openEditModal(turn.id);}; actions.appendChild(editBtn);
+    if(turn.status!=='complete'){
+      const markBtn=document.createElement('button'); markBtn.className='btn btn-sm btn-gold'; markBtn.textContent='✓ Mark Complete';
+      markBtn.onclick=(e)=>{e.stopPropagation();const ts=getTurns();const t=ts.find(t=>t.id===turn.id);if(t){t.status='complete';t.completedAt=new Date().toISOString();saveTurn(t);renderTracker();}};
+      actions.appendChild(markBtn);
+    }
+    const delBtn=document.createElement('button'); delBtn.className='btn btn-sm btn-danger'; delBtn.textContent='🗑 Delete';
+    const turnId=turn.id; const turnUnit=turn.unit;
+    delBtn.onclick=(e)=>{
+      e.stopPropagation();
+      showConfirm('Delete Turn',`Are you sure you want to delete the turn for <strong>Unit ${turnUnit}</strong>? This cannot be undone.`,[
+        {label:'Cancel',style:'btn-ghost',onClick:()=>{}},
+        {label:'Delete',style:'btn-danger',onClick:()=>{
+          deleteTurn(turnId);
+          openAccordions.delete(turnId);
+          showToast('Unit '+turnUnit+' deleted','warning');
+          renderTracker();
+        }}
+      ]);
     };
-    section.appendChild(header);
+    actions.appendChild(delBtn);
 
-    if(hasSubs){
-      const subList=document.createElement('div'); subList.className='task-subtasks';
-      task.subtasks.forEach(sub=>{
-        const item=document.createElement('div'); item.className='task-subtask-item';
-        const sc=document.createElement('div'); sc.className='custom-check'+(_editChecked[sub.id]?' checked':'');
-        const sl=document.createElement('span'); sl.style.fontSize='13px'; sl.textContent=sub.label;
-        item.appendChild(sc); item.appendChild(sl);
-        item.onclick=(e)=>{
-          e.stopPropagation();
-          _editChecked[sub.id]=!_editChecked[sub.id];
-          renderEditChecklist(); renderEditBilling();
-        };
-        subList.appendChild(item);
+    // ── ACCORDION ──
+    const accordion=document.createElement('div');
+    accordion.className='turn-card-accordion'+(openAccordions.has(turn.id)?' open':'');
+    accordion.id='accordion_'+turn.id;
+
+    const abody=document.createElement('div'); abody.className='accordion-body';
+
+    // Progress bar
+    const progWrap=document.createElement('div'); progWrap.className='progress-bar-wrap';
+    const progBar=document.createElement('div'); progBar.className='progress-bar'; progBar.style.width=pct+'%';
+    progWrap.appendChild(progBar);
+    const progLbl=document.createElement('div'); progLbl.className='progress-label';
+    progLbl.textContent=doneCount+' of '+totalCount+' tasks completed by subcontractor';
+    abody.appendChild(progWrap); abody.appendChild(progLbl);
+
+    // Full task list with check states
+    const taskTitle=document.createElement('div'); taskTitle.className='accordion-section-title'; taskTitle.textContent='Task List';
+    abody.appendChild(taskTitle);
+    turn.tasks.forEach(id=>{
+      const isDone=!!subProgress[id];
+      const row=document.createElement('div'); row.className='acc-task-row';
+      const chk=document.createElement('div'); chk.className='custom-check'+(isDone?' checked':'');
+      const lbl=document.createElement('div'); lbl.className='acc-task-label'+(isDone?' done':'');
+      lbl.textContent=TASK_LABELS[id]||id;
+      if(turn.notes&&turn.notes[id]){
+        const n=document.createElement('div'); n.style.cssText='font-size:11px;color:var(--dark-gray);margin-top:1px;';
+        n.textContent='Note: '+turn.notes[id]; lbl.appendChild(n);
+      }
+      row.appendChild(chk); row.appendChild(lbl); abody.appendChild(row);
+    });
+
+    // Sub notes section
+    const notesTitle=document.createElement('div'); notesTitle.className='accordion-section-title';
+    notesTitle.style.marginTop='16px';
+    notesTitle.innerHTML='Sub Notes '+(hasNotes?'<span class="flag-badge">🚩 '+turn.subNotes.length+'</span>':'');
+    abody.appendChild(notesTitle);
+
+    if(hasNotes){
+      turn.subNotes.forEach(note=>{
+        const nr=document.createElement('div'); nr.className='acc-note-row';
+        const nt=document.createElement('div'); nt.textContent=note.text;
+        const ts=document.createElement('div'); ts.className='acc-note-time';
+        ts.textContent=new Date(note.at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+        nr.appendChild(nt); nr.appendChild(ts); abody.appendChild(nr);
       });
-      section.appendChild(subList);
+    } else {
+      const empty=document.createElement('div'); empty.style.cssText='font-size:13px;color:var(--mid-gray);padding:6px 0;';
+      empty.textContent='No notes from subcontractor yet.'; abody.appendChild(empty);
     }
-    wrap.appendChild(section);
+
+    accordion.appendChild(abody);
+    card.appendChild(top); card.appendChild(tw); card.appendChild(actions); card.appendChild(accordion);
+    list.appendChild(card);
   });
 }
 
-function renderEditBilling(){
-  const wrap=document.getElementById('editBillTable'); if(!wrap) return;
-  wrap.innerHTML='';
-  const pricing=SUB_PRICING[_editProperty]||SUB_PRICING['Orchards'];
-  const allIds=[];
-  TASKS.forEach(t=>{ if(t.subtasks&&t.subtasks.length) t.subtasks.forEach(s=>allIds.push(s.id)); else allIds.push(t.id); });
-
-  let hasAny=false;
-  let genAdded=false;
-  const table=document.createElement('table'); table.style.cssText='width:100%;border-collapse:collapse;font-size:13px;';
-  const tbody=document.createElement('tbody');
-
-  allIds.forEach(tid=>{
-    if(!_editChecked[tid]) return;
-    if(GENERAL_TURN_SUBTASK_IDS.has(tid)){
-      if(genAdded) return; genAdded=true; hasAny=true;
-      const autoPrice=_editGenType==='full'?pricing.general_full:pricing.general_partial;
-      if(_editBilling['general_turn']===undefined) _editBilling['general_turn']=autoPrice;
-      const tr=document.createElement('tr');
-      const td1=document.createElement('td'); td1.style.padding='5px 0';
-      const wrap2=document.createElement('div'); wrap2.style.cssText='display:flex;align-items:center;gap:8px;';
-      const lbl=document.createElement('span'); lbl.style.fontWeight='600'; lbl.textContent='General Turn';
-      const sel=document.createElement('select'); sel.style.cssText='border:1.5px solid var(--mid-gray);border-radius:6px;padding:3px 7px;font-size:12px;font-family:inherit;';
-      ['full','partial'].forEach(opt=>{ const o=document.createElement('option'); o.value=opt; o.textContent=opt==='full'?'Full Turn':'Partial Turn'; if(opt===_editGenType) o.selected=true; sel.appendChild(o); });
-      sel.onchange=(e)=>{ _editGenType=e.target.value; _editBilling['general_turn']=_editGenType==='full'?pricing.general_full:pricing.general_partial; renderEditBilling(); };
-      wrap2.appendChild(lbl); wrap2.appendChild(sel); td1.appendChild(wrap2);
-      const td2=document.createElement('td'); td2.style.cssText='text-align:right;padding:5px 0;';
-      const inp=document.createElement('input'); inp.type='number'; inp.value=_editBilling['general_turn']||0;
-      inp.style.cssText='width:90px;border:1.5px solid var(--mid-gray);border-radius:5px;padding:4px 7px;font-size:13px;text-align:right;';
-      inp.oninput=(e)=>{ _editBilling['general_turn']=parseFloat(e.target.value)||0; updateEditTotal(); };
-      td2.appendChild(inp); tr.appendChild(td1); tr.appendChild(td2); tbody.appendChild(tr);
-      updateEditTotal(); return;
-    }
-    hasAny=true;
-    const autoPrice=(()=>{ const p=pricing[tid]; return p!==undefined?p:null; })();
-    if(autoPrice!==null&&_editBilling[tid]===undefined) _editBilling[tid]=autoPrice;
-    const tr=document.createElement('tr');
-    const td1=document.createElement('td'); td1.style.padding='5px 0'; td1.textContent=TASK_LABELS[tid]||tid;
-    const td2=document.createElement('td'); td2.style.cssText='text-align:right;padding:5px 0;';
-    const inp=document.createElement('input'); inp.type='number'; inp.placeholder='0.00';
-    inp.value=_editBilling[tid]!==undefined?_editBilling[tid]:(autoPrice||'');
-    inp.style.cssText='width:90px;border:1.5px solid var(--mid-gray);border-radius:5px;padding:4px 7px;font-size:13px;text-align:right;';
-    inp.oninput=(e)=>{ _editBilling[tid]=parseFloat(e.target.value)||0; updateEditTotal(); };
-    td2.appendChild(inp); tr.appendChild(td1); tr.appendChild(td2); tbody.appendChild(tr);
-  });
-
-  if(!hasAny){ tbody.innerHTML='<tr><td colspan="2" style="text-align:center;color:var(--mid-gray);padding:10px;font-size:13px;">No tasks checked</td></tr>'; }
-  table.appendChild(tbody); wrap.appendChild(table);
-
-  // Total row
-  const totalRow=document.createElement('div');
-  totalRow.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:8px;border-top:2px solid var(--navy);font-weight:700;font-size:15px;';
-  totalRow.innerHTML='<span>Total</span><span id="editBillTotal" style="color:var(--gold);">$0.00</span>';
-  wrap.appendChild(totalRow);
-  updateEditTotal();
+function toggleAccordion(turnId){
+  if(openAccordions.has(turnId)) openAccordions.delete(turnId);
+  else openAccordions.add(turnId);
+  const el=document.getElementById('accordion_'+turnId);
+  if(el) el.classList.toggle('open', openAccordions.has(turnId));
 }
 
-function updateEditTotal(){
-  const el=document.getElementById('editBillTotal'); if(!el) return;
-  const t=Object.entries(_editBilling).reduce((sum,[key,val])=>{
-    if(GENERAL_TURN_SUBTASK_IDS.has(key)) return sum;
-    return sum+(val||0);
-  },0);
-  el.textContent='$'+t.toFixed(2);
-}
-
-function closeEditModal(){ document.getElementById('editModal').classList.add('hidden'); editingTurnId=null; }
-
-function saveEdit(){
-  if(!editingTurnId) return;
-  const turns=getTurns(); const turn=turns.find(t=>t.id===editingTurnId); if(!turn) return;
-
-  const newUnit=document.getElementById('editUnit').value.trim().toUpperCase();
-  if(!newUnit){ showToast('Unit number required','error'); return; }
-
-  // Recalculate total from edit billing state
-  const newTotal=Object.entries(_editBilling).reduce((sum,[key,val])=>{
-    if(GENERAL_TURN_SUBTASK_IDS.has(key)) return sum;
-    return sum+(val||0);
-  },0);
-
-  const newTasks=Object.keys(_editChecked).filter(k=>_editChecked[k]);
-
-  // Update turn in place — preserve stage, punchout items, progress, etc.
-  turn.unit=newUnit;
-  turn.sub=document.getElementById('editSub').value.trim();
-  turn.due=document.getElementById('editDue').value;
-  turn.status=document.getElementById('editStatus').value;
-  turn.tasks=newTasks;
-  turn.notes={..._editNotes};
-  turn.billing={..._editBilling};
-  turn.generalTurnType=_editGenType;
-  turn.varQtys={..._editVarQtys};
-  turn.total=newTotal;
-
-  saveTurn(turn);
-  closeEditModal();
-  renderTracker();
-  showToast('Unit '+turn.unit+' scope updated ✓','success');
-  // Refresh any other active tabs
-  if(document.getElementById('screen-materials').classList.contains('active')) renderMaterials();
-  if(document.getElementById('screen-punchout').classList.contains('active')) renderPunchout();
-  if(document.getElementById('screen-finalwalk').classList.contains('active')) renderFinalWalk();
-}
-
+// ─── EDIT TURN — load into walkthrough ────────────────
 // ─── MATERIALS TAB ────────────────────────────────────
 function renderMaterials(){
   renderMasterList();
