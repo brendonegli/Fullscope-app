@@ -982,6 +982,12 @@ function renderBilling(){
   let hasAny=false;
   const pricing=SUB_PRICING[selectedProperty];
 
+  // Wipe billingPrices clean — only rebuild from currently checked tasks.
+  // This prevents stale prices from previous checks inflating the total.
+  const savedGenTurn=billingPrices['general_turn']; // preserve user-edited gen turn price
+  const savedPrices={...billingPrices};              // preserve any user-edited prices
+  billingPrices={};
+
   const allIds=[];
   TASKS.forEach(t=>{
     if(t.subtasks&&t.subtasks.length) t.subtasks.forEach(s=>allIds.push(s.id));
@@ -1001,7 +1007,8 @@ function renderBilling(){
       hasAny=true;
 
       const autoPrice=generalTurnType==='full' ? pricing.general_full : pricing.general_partial;
-      billingPrices['general_turn']=autoPrice;
+      // Use user-edited price if they changed it, otherwise use auto
+      billingPrices['general_turn']=savedPrices['general_turn']!==undefined ? savedPrices['general_turn'] : autoPrice;
 
       const tr=document.createElement('tr');
       // Label cell with dropdown
@@ -1058,14 +1065,9 @@ function renderBilling(){
 
     // All other tasks — auto-price with editable override
     hasAny=true;
-    const autoPrice=getAutoPrice(id);
-    // For doors: always sync billingPrices to the qty-based auto price so it stays current
-    // as the user enters door quantities in the materials section
-    if(id==='doors'){
-      if(autoPrice!==null) billingPrices['doors']=autoPrice;
-    } else {
-      if(autoPrice!==null && billingPrices[id]===undefined) billingPrices[id]=autoPrice;
-    }
+    const autoPrice=getAutoPrice(id); // for doors this uses current varQtys
+    // Restore user-edited price if they typed one; otherwise use fresh auto price
+    billingPrices[id] = (savedPrices[id]!==undefined && id!=='doors') ? savedPrices[id] : (autoPrice||0);
 
     const tr=document.createElement('tr');
     const td1=document.createElement('td');
@@ -1092,36 +1094,43 @@ function renderBilling(){
 }
 
 function updateTotal(){
-  // Recompute total from scratch based only on what is currently checked.
-  // Never trust stale billingPrices keys from previously checked tasks.
   let t = 0;
-  const pricing = SUB_PRICING[selectedProperty] || {};
   let generalTurnCounted = false;
+  const breakdown = [];
 
   TASKS.forEach(task => {
     const subs = task.subtasks || [];
     if(subs.length > 0){
-      // Parent with subtasks
       const anyChecked = subs.some(s => checkedTasks[s.id]);
       if(!anyChecked) return;
       if(GENERAL_TURN_SUBTASK_IDS.has(subs[0].id)){
-        // General Turn — count once using billingPrices['general_turn']
         if(!generalTurnCounted){
           generalTurnCounted = true;
-          t += billingPrices['general_turn'] || 0;
+          const v = billingPrices['general_turn'] || 0;
+          t += v;
+          breakdown.push('general_turn: $'+v);
         }
       } else {
-        // Other parent-with-subtasks (Add-ons)
         subs.forEach(s => {
-          if(checkedTasks[s.id]) t += billingPrices[s.id] || 0;
+          if(checkedTasks[s.id]){
+            const v = billingPrices[s.id] || 0;
+            t += v;
+            breakdown.push(s.id+': $'+v);
+          }
         });
       }
     } else {
-      // Leaf task (no subtasks) — doors, cabinets, etc.
       if(!checkedTasks[task.id]) return;
-      t += billingPrices[task.id] || 0;
+      const v = billingPrices[task.id] || 0;
+      t += v;
+      breakdown.push(task.id+': $'+v);
     }
   });
+
+  console.log('[updateTotal] checkedTasks:', JSON.stringify(checkedTasks));
+  console.log('[updateTotal] billingPrices:', JSON.stringify(billingPrices));
+  console.log('[updateTotal] breakdown:', breakdown);
+  console.log('[updateTotal] TOTAL:', t);
 
   document.getElementById('billingTotal').textContent='$'+t.toFixed(2);
 }
