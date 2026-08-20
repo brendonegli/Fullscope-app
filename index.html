@@ -350,7 +350,19 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
 </div>
 
 <!-- EDIT TURN MODAL -->
-
+<div class="modal-overlay hidden" id="editModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Edit Turn</h3>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="modal-body" id="editModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-gold btn-sm" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
 
 <!-- LANDING SCREEN -->
 <div class="screen active" id="screen-landing">
@@ -427,12 +439,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off-white);col
 <!-- WALKTHROUGH SCREEN -->
 <div class="screen" id="screen-walkthrough">
   <div class="page-wrap">
-    <div id="walkthroughEditBanner" style="display:none;background:var(--gold);color:#fff;border-radius:10px;padding:10px 16px;margin-bottom:14px;font-size:13px;font-weight:600;display:none;align-items:center;justify-content:space-between;gap:10px;">
+    <div id="walkthroughEditBanner" style="display:none;background:var(--gold);color:#fff;border-radius:10px;padding:10px 16px;margin-bottom:14px;font-size:13px;font-weight:600;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
       <span>✏️ Editing Unit <span id="walkthroughEditUnit"></span> — changes will update the saved turn</span>
-      <button onclick="cancelEditWalkthrough()" style="background:rgba(255,255,255,0.3);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;">✕ Cancel Edit</button>
+      <button onclick="cancelEditWalkthrough()" style="background:rgba(255,255,255,0.3);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;">✕ Cancel</button>
     </div>
     <div class="page-title">Unit Walkthrough</div>
-    <div class="page-subtitle" id="walkthroughSubtitle">Check tasks, generate materials, and save the turn</div>
+    <div class="page-subtitle">Check tasks, generate materials, and save the turn</div>
 
     <div class="card">
       <div class="card-header">🏠 Unit Info</div>
@@ -1226,11 +1238,11 @@ function initSave(){
   const checked=Object.keys(checkedTasks).filter(k=>checkedTasks[k]);
   if(checked.length===0){showToast('Please check at least one task.','error');return;}
 
-  // ── EDIT MODE: update existing turn in place ──
+  // ── EDIT MODE: update existing turn ──
   if(_editingTurnId){
     showConfirm(
       'Save Scope Changes',
-      `Save changes to <strong>Unit ${unit}</strong>? This will update the scope, billing, and materials for this turn.`,
+      `Save updated scope for <strong>Unit ${unit}</strong>? This will update tasks, billing, and materials.`,
       [
         {label:'Cancel', style:'btn-ghost', onClick:()=>{}},
         {label:'Save Changes', style:'btn-gold', onClick:()=>doEditSave(unit,due,sub,checked)},
@@ -1267,20 +1279,17 @@ function doEditSave(unit,due,sub,checked){
     return sum+(val||0);
   },0);
 
-  // Update scope fields — preserve stage, punchout, progress, dates
-  turn.unit=unit; turn.due=due; turn.sub=sub;
+  // Update scope — preserve stage, punchout items, progress, completed date, etc.
+  turn.unit=unit; turn.due=due; turn.sub=sub; turn.property=selectedProperty;
   turn.tasks=checked; turn.notes={...taskNotes}; turn.billing={...billingPrices};
   turn.generalTurnType=generalTurnType; turn.varQtys=finalVarQtys; turn.total=total;
-  turn.property=selectedProperty;
 
   saveTurn(turn);
   showToast('Unit '+unit+' scope updated ✓','success');
 
-  // Exit edit mode and go back to tracker
+  // Exit edit mode, clear form, go back to tracker
   _editingTurnId=null;
-  const banner=document.getElementById('walkthroughEditBanner');
-  if(banner) banner.style.display='none';
-  // Clear walkthrough for next use
+  document.getElementById('walkthroughEditBanner').style.display='none';
   checkedTasks={}; taskNotes={}; billingPrices={}; openSections={}; varQtys={}; generalTurnType='full';
   document.getElementById('unitNumber').value='';
   document.getElementById('dueDate').value='';
@@ -1288,6 +1297,9 @@ function doEditSave(unit,due,sub,checked){
   renderChecklist();
   showScreen('tracker');
   renderTracker();
+  if(document.getElementById('screen-materials').classList.contains('active')) renderMaterials();
+  if(document.getElementById('screen-punchout').classList.contains('active')) renderPunchout();
+  if(document.getElementById('screen-finalwalk').classList.contains('active')) renderFinalWalk();
 }
 
 function doSave(unit,due,sub,checked,overwriteId){
@@ -1307,9 +1319,12 @@ function doSave(unit,due,sub,checked,overwriteId){
     created:new Date().toISOString(), matStatus:{}
   };
 
+  let turns=getTurns();
   if(overwriteId){
+    turns=turns.map(t=>t.id===overwriteId?turn:t);
     showToast('Unit '+unit+' overwritten ✓','warning');
   } else {
+    turns.push(turn);
     showToast('Unit '+unit+' saved ✓','success');
   }
   saveTurn(turn);
@@ -1534,73 +1549,63 @@ function toggleAccordion(turnId){
   if(el) el.classList.toggle('open', openAccordions.has(turnId));
 }
 
-// ─── EDIT TURN — load into walkthrough ────────────────
-let _editingTurnId = null; // non-null when walkthrough is in edit mode
+// ─── EDIT TURN ────────────────────────────────────────
+let editingTurnId=null; // kept for compatibility
+let _editingTurnId=null; // null = new turn, non-null = editing existing turn
 
 function openEditModal(id){
-  // Navigate to walkthrough tab with this turn loaded
   const turns=getTurns();
   const turn=turns.find(t=>t.id===id);
   if(!turn) return;
-  loadTurnIntoWalkthrough(turn);
-  showScreen('walkthrough');
-  // Scroll to top of walkthrough
-  setTimeout(()=>{ document.getElementById('screen-walkthrough').scrollTop=0; window.scrollTo(0,0); },50);
-}
-
-function loadTurnIntoWalkthrough(turn){
   _editingTurnId=turn.id;
 
-  // Set property
+  // ── Populate property selector ──
   selectedProperty=turn.property||'Orchards';
   document.querySelectorAll('.prop-btn').forEach(b=>b.classList.remove('active'));
-  const propBtn=document.getElementById('prop-'+selectedProperty.toLowerCase());
-  if(propBtn) propBtn.classList.add('active');
+  const pb=document.getElementById('prop-'+selectedProperty.toLowerCase());
+  if(pb) pb.classList.add('active');
 
-  // Set unit info fields
+  // ── Populate unit info fields ──
   document.getElementById('unitNumber').value=turn.unit||'';
   document.getElementById('dueDate').value=turn.due||'';
   document.getElementById('subName').value=turn.sub||'';
 
-  // Restore checkedTasks
+  // ── Restore task state ──
   checkedTasks={};
   (turn.tasks||[]).forEach(tid=>{ checkedTasks[tid]=true; });
-
-  // Restore notes
   taskNotes={...(turn.notes||{})};
-
-  // Restore billing prices
   billingPrices={...(turn.billing||{})};
-
-  // Restore varQtys
   varQtys={...(turn.varQtys||{})};
-
-  // Restore generalTurnType
   generalTurnType=turn.generalTurnType||'full';
 
-  // Open sections for checked parent tasks
+  // ── Open parent sections for any checked subtasks ──
   openSections={};
   TASKS.forEach(t=>{
-    if(t.subtasks&&t.subtasks.length){
-      if(t.subtasks.some(s=>checkedTasks[s.id])) openSections[t.id]=true;
-    }
+    if(t.subtasks&&t.subtasks.length&&t.subtasks.some(s=>checkedTasks[s.id]))
+      openSections[t.id]=true;
   });
 
-  // Show editing banner
+  // ── Show banner ──
   const banner=document.getElementById('walkthroughEditBanner');
-  if(banner){ banner.style.display='flex'; document.getElementById('walkthroughEditUnit').textContent=turn.unit; }
+  document.getElementById('walkthroughEditUnit').textContent=turn.unit;
+  banner.style.display='flex';
 
-  // Re-render checklist, materials, billing
+  // ── Re-render walkthrough UI ──
   renderChecklist();
   renderMaterialPreview();
   renderBilling();
+
+  // ── Navigate to walkthrough ──
+  showScreen('walkthrough');
+  setTimeout(()=>window.scrollTo(0,0), 50);
 }
+
+function closeEditModal(){ /* no longer used — edit happens in walkthrough tab */ }
 
 function cancelEditWalkthrough(){
   _editingTurnId=null;
-  // Hide banner, clear form
-  const banner=document.getElementById('walkthroughEditBanner');
-  if(banner) banner.style.display='none';
+  document.getElementById('walkthroughEditBanner').style.display='none';
+  // Clear the walkthrough form
   checkedTasks={}; taskNotes={}; billingPrices={}; openSections={}; varQtys={}; generalTurnType='full';
   document.getElementById('unitNumber').value='';
   document.getElementById('dueDate').value='';
@@ -1612,10 +1617,6 @@ function cancelEditWalkthrough(){
   showScreen('tracker');
 }
 
-function closeEditModal(){ /* no-op — edit now uses walkthrough tab */ }
-
-
-// ─── EDIT TURN — load into walkthrough ────────────────
 // ─── MATERIALS TAB ────────────────────────────────────
 function renderMaterials(){
   renderMasterList();
