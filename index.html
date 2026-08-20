@@ -1092,25 +1092,37 @@ function renderBilling(){
 }
 
 function updateTotal(){
-  // Build the set of keys that are actually active (checked tasks only)
-  const activeKeys=new Set();
-  TASKS.forEach(t=>{
-    if(t.subtasks&&t.subtasks.length){
-      if(t.subtasks.some(s=>checkedTasks[s.id])) activeKeys.add('general_turn');
+  // Recompute total from scratch based only on what is currently checked.
+  // Never trust stale billingPrices keys from previously checked tasks.
+  let t = 0;
+  const pricing = SUB_PRICING[selectedProperty] || {};
+  let generalTurnCounted = false;
+
+  TASKS.forEach(task => {
+    const subs = task.subtasks || [];
+    if(subs.length > 0){
+      // Parent with subtasks
+      const anyChecked = subs.some(s => checkedTasks[s.id]);
+      if(!anyChecked) return;
+      if(GENERAL_TURN_SUBTASK_IDS.has(subs[0].id)){
+        // General Turn — count once using billingPrices['general_turn']
+        if(!generalTurnCounted){
+          generalTurnCounted = true;
+          t += billingPrices['general_turn'] || 0;
+        }
+      } else {
+        // Other parent-with-subtasks (Add-ons)
+        subs.forEach(s => {
+          if(checkedTasks[s.id]) t += billingPrices[s.id] || 0;
+        });
+      }
     } else {
-      if(checkedTasks[t.id]) activeKeys.add(t.id);
+      // Leaf task (no subtasks) — doors, cabinets, etc.
+      if(!checkedTasks[task.id]) return;
+      t += billingPrices[task.id] || 0;
     }
   });
-  // Add-ons use their own keys
-  if(checkedTasks['addon_drywall']) activeKeys.add('addon_drywall');
-  if(checkedTasks['addon_other']) activeKeys.add('addon_other');
 
-  // Sum only active keys — ignore stale billingPrices from previously checked tasks
-  const t=Object.entries(billingPrices).reduce((sum,[key,val])=>{
-    if(GENERAL_TURN_SUBTASK_IDS.has(key)) return sum; // rolled into general_turn
-    if(!activeKeys.has(key)) return sum; // unchecked — skip
-    return sum+(val||0);
-  },0);
   document.getElementById('billingTotal').textContent='$'+t.toFixed(2);
 }
 
@@ -1250,6 +1262,29 @@ function showConfirm(title, body, buttons){
 function closeConfirm(){ document.getElementById('confirmModal').classList.add('hidden'); }
 
 // ─── SAVE FLOW ────────────────────────────────────────
+function computeTotal(){
+  // Single source of truth for total — mirrors updateTotal() logic exactly
+  let t = 0;
+  const pricing = SUB_PRICING[selectedProperty] || {};
+  let generalTurnCounted = false;
+  TASKS.forEach(task => {
+    const subs = task.subtasks || [];
+    if(subs.length > 0){
+      const anyChecked = subs.some(s => checkedTasks[s.id]);
+      if(!anyChecked) return;
+      if(GENERAL_TURN_SUBTASK_IDS.has(subs[0].id)){
+        if(!generalTurnCounted){ generalTurnCounted=true; t += billingPrices['general_turn']||0; }
+      } else {
+        subs.forEach(s=>{ if(checkedTasks[s.id]) t += billingPrices[s.id]||0; });
+      }
+    } else {
+      if(!checkedTasks[task.id]) return;
+      t += billingPrices[task.id]||0;
+    }
+  });
+  return t;
+}
+
 function initSave(){
   const unit=document.getElementById('unitNumber').value.trim().toUpperCase();
   const due=document.getElementById('dueDate').value;
@@ -1295,10 +1330,7 @@ function doEditSave(unit,due,sub,checked){
 
   const finalVarQtys={...varQtys};
   if((finalVarQtys['dishwasher']||0)>0) finalVarQtys['dw_supply']=finalVarQtys['dishwasher'];
-  const total=Object.entries(billingPrices).reduce((sum,[key,val])=>{
-    if(GENERAL_TURN_SUBTASK_IDS.has(key)) return sum;
-    return sum+(val||0);
-  },0);
+  const total=computeTotal();
 
   // Update scope — preserve stage, punchout items, progress, completed date, etc.
   turn.unit=unit; turn.due=due; turn.sub=sub; turn.property=selectedProperty;
@@ -1327,10 +1359,7 @@ function doSave(unit,due,sub,checked,overwriteId){
   const finalVarQtys={...varQtys};
   if((finalVarQtys['dishwasher']||0)>0) finalVarQtys['dw_supply']=finalVarQtys['dishwasher'];
 
-  const total=Object.entries(billingPrices).reduce((sum,[key,val])=>{
-    if(GENERAL_TURN_SUBTASK_IDS.has(key)) return sum;
-    return sum+(val||0);
-  },0);
+  const total=computeTotal();
 
   const turn={
     id:overwriteId||Date.now(), unit, property:selectedProperty, due, sub,
