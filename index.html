@@ -1059,7 +1059,13 @@ function renderBilling(){
     // All other tasks — auto-price with editable override
     hasAny=true;
     const autoPrice=getAutoPrice(id);
-    if(autoPrice!==null && billingPrices[id]===undefined) billingPrices[id]=autoPrice;
+    // For doors: always sync billingPrices to the qty-based auto price so it stays current
+    // as the user enters door quantities in the materials section
+    if(id==='doors'){
+      if(autoPrice!==null) billingPrices['doors']=autoPrice;
+    } else {
+      if(autoPrice!==null && billingPrices[id]===undefined) billingPrices[id]=autoPrice;
+    }
 
     const tr=document.createElement('tr');
     const td1=document.createElement('td');
@@ -1086,10 +1092,23 @@ function renderBilling(){
 }
 
 function updateTotal(){
-  // Sum all billingPrices including general_turn
+  // Build the set of keys that are actually active (checked tasks only)
+  const activeKeys=new Set();
+  TASKS.forEach(t=>{
+    if(t.subtasks&&t.subtasks.length){
+      if(t.subtasks.some(s=>checkedTasks[s.id])) activeKeys.add('general_turn');
+    } else {
+      if(checkedTasks[t.id]) activeKeys.add(t.id);
+    }
+  });
+  // Add-ons use their own keys
+  if(checkedTasks['addon_drywall']) activeKeys.add('addon_drywall');
+  if(checkedTasks['addon_other']) activeKeys.add('addon_other');
+
+  // Sum only active keys — ignore stale billingPrices from previously checked tasks
   const t=Object.entries(billingPrices).reduce((sum,[key,val])=>{
-    // Don't double-count general turn subtasks — they're rolled into general_turn key
-    if(GENERAL_TURN_SUBTASK_IDS.has(key)) return sum;
+    if(GENERAL_TURN_SUBTASK_IDS.has(key)) return sum; // rolled into general_turn
+    if(!activeKeys.has(key)) return sum; // unchecked — skip
     return sum+(val||0);
   },0);
   document.getElementById('billingTotal').textContent='$'+t.toFixed(2);
@@ -1168,6 +1187,8 @@ function renderMaterialPreview(){
           if(item.key==='dishwasher') varQtys['dw_supply']=v;
           // Re-render to show/hide supply line row
           if(item.key==='dishwasher') renderMaterialPreview();
+          // Doors are priced per door — update billing total when qty changes
+          if(['door24','door28','door30','door32'].includes(item.key)) renderBilling();
         };
         inp.onfocus=()=>inp.select();
         const unit=document.createElement('span'); unit.style.cssText='font-size:12px;color:var(--dark-gray);';
